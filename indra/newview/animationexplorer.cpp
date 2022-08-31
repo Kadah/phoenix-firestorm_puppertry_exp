@@ -343,7 +343,8 @@ void AnimationExplorer::updateList(F64 current_timestamp)
 		}
 
 		std::string prio_text = LLTrans::getString("animation_explorer_unknown_priority");
-		LLKeyframeMotion* motion = dynamic_cast<LLKeyframeMotion*>(gAgentAvatarp->findMotion(anim_id));
+		// LLKeyframeMotion* motion = std::static_pointer_cast<LLKeyframeMotion>(gAgentAvatarp->findMotion(anim_id));
+		LLKeyframeMotion::ptr_t motion = std::static_pointer_cast<LLKeyframeMotion>((gAgentAvatarp->findMotion(anim_id)));
 		if (motion)
 		{
 			prio_text = llformat("%d", (S32)motion->getPriority());

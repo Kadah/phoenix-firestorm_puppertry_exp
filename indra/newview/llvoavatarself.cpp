@@ -1173,7 +1173,7 @@ void LLVOAvatarSelf::idleUpdateAppearanceAnimation()
 }
 
 // virtual
-void LLVOAvatarSelf::requestStopMotion(LLMotion* motion)
+void LLVOAvatarSelf::requestStopMotion(const LLMotion::ptr_t &motion)
 {
 	// Only agent avatars should handle the stop motion notifications.
 

@@ -38,6 +38,7 @@
 #include "v3dmath.h"
 #include "httprequest.h"
 #include "llcorehttputil.h"
+#include "llmotion.h"
 
 #include "llviewerinventory.h"	// <FS:CR> Needed for LLViewerInventoryItem
 
@@ -51,7 +52,6 @@ extern const U8 	AGENT_STATE_TYPING;  // Typing indication
 extern const U8 	AGENT_STATE_EDITING; // Set when agent has objects selected
 
 class LLViewerRegion;
-class LLMotion;
 class LLMessageSystem;
 class LLPermissions;
 class LLHost;
@@ -576,7 +576,7 @@ public:
 	//void            stopCurrentAnimations();
 	void            stopCurrentAnimations(bool force_keep_script_perms = false);
 	// </FS:Ansariel>
-	void			requestStopMotion(LLMotion* motion);
+	void			requestStopMotion(const LLMotion::ptr_t &motion);
 	void			onAnimStop(const LLUUID& id);
 	void			sendAnimationRequests(const std::vector<LLUUID> &anim_ids, EAnimRequest request);
 	void			sendAnimationRequest(const LLUUID &anim_id, EAnimRequest request);

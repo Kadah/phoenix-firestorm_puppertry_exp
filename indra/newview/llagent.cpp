@@ -69,6 +69,7 @@
 // <FS:Zi> We don't use the mini location panel in Firestorm
 // #include "llpaneltopinfobar.h"
 #include "llparcel.h"
+#include "llpuppetmotion.h"
 #include "llrendersphere.h"
 #include "llscriptruntimeperms.h"
 #include "llsdutil.h"
@@ -1057,8 +1058,10 @@ void LLAgent::capabilityReceivedCallback(const LLUUID &region_id, LLViewerRegion
     {
         regionp->requestSimulatorFeatures();
         LLAppViewer::instance()->updateNameLookupUrl(regionp);
+        LLPuppetMotion::RequestPuppetryStatus(regionp);
     }
 }
+
 
 //-----------------------------------------------------------------------------
 // setRegion()
@@ -1111,6 +1114,7 @@ void LLAgent::setRegion(LLViewerRegion *regionp)
             {
                 regionp->requestSimulatorFeatures();
                 LLAppViewer::instance()->updateNameLookupUrl(regionp);
+                LLPuppetMotion::RequestPuppetryStatus(regionp);
             }
             else
             {
@@ -1137,10 +1141,15 @@ void LLAgent::setRegion(LLViewerRegion *regionp)
             if (regionp->capabilitiesReceived())
             {
                 LLAppViewer::instance()->updateNameLookupUrl(regionp);
+                LLPuppetMotion::RequestPuppetryStatus(regionp);
             }
             else
             {
-                regionp->setCapabilitiesReceivedCallback([](const LLUUID &region_id, LLViewerRegion* regionp) {LLAppViewer::instance()->updateNameLookupUrl(regionp); });
+                regionp->setCapabilitiesReceivedCallback([](const LLUUID &region_id, LLViewerRegion* regionp) 
+                    {
+                        LLAppViewer::instance()->updateNameLookupUrl(regionp); 
+                        LLPuppetMotion::RequestPuppetryStatus(regionp);
+                    });
             }
 		}
 
@@ -3153,7 +3162,7 @@ void LLAgent::setStartPositionSuccess(const LLSD &result)
     }
 }
 
-void LLAgent::requestStopMotion( LLMotion* motion )
+void LLAgent::requestStopMotion( const LLMotion::ptr_t &motion )
 {
 	// Notify all avatars that a motion has stopped.
 	// This is needed to clear the animation state bits

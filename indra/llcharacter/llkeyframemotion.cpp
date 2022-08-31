@@ -457,9 +457,9 @@ LLKeyframeMotion::~LLKeyframeMotion()
 //-----------------------------------------------------------------------------
 // create()
 //-----------------------------------------------------------------------------
-LLMotion *LLKeyframeMotion::create(const LLUUID &id)
+LLMotion::ptr_t LLKeyframeMotion::create(const LLUUID &id)
 {
-	return new LLKeyframeMotion(id);
+	return std::make_shared<LLKeyframeMotion>(id);
 }
 
 //-----------------------------------------------------------------------------
@@ -733,7 +733,7 @@ BOOL LLKeyframeMotion::onUpdate(F32 time, U8* joint_mask)
 void LLKeyframeMotion::applyKeyframes(F32 time)
 {
 	llassert_always (mJointMotionList->getNumJointMotions() <= mJointStates.size());
-	for (U32 i=0; i<mJointMotionList->getNumJointMotions(); i++)
+    for (U32 i=0; i<mJointMotionList->getNumJointMotions(); i++)
 	{
 		mJointMotionList->getJointMotion(i)->update(mJointStates[i],
 													  time, 
@@ -2375,7 +2375,7 @@ void LLKeyframeMotion::onLoadComplete(const LLUUID& asset_uuid,
 	LLCharacter* character = *char_iter;
 
 	// look for an existing instance of this motion
-	LLKeyframeMotion* motionp = static_cast<LLKeyframeMotion*> (character->findMotion(asset_uuid));
+	LLKeyframeMotion::ptr_t motionp(std::static_pointer_cast<LLKeyframeMotion>(character->findMotion(asset_uuid)));
 	if (motionp)
 	{
 		if (0 == status)
@@ -2399,7 +2399,7 @@ void LLKeyframeMotion::onLoadComplete(const LLUUID& asset_uuid,
 			// </FS:ND>
 		
 			LLDataPackerBinaryBuffer dp(buffer, size);
-			if (motionp->deserialize(dp, asset_uuid))
+            if (motionp->deserialize(dp, asset_uuid))
 			{
 				motionp->mAssetStatus = ASSET_LOADED;
 			}

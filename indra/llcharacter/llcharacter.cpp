@@ -138,7 +138,7 @@ void LLCharacter::removeMotion( const LLUUID& id )
 //-----------------------------------------------------------------------------
 // findMotion()
 //-----------------------------------------------------------------------------
-LLMotion* LLCharacter::findMotion( const LLUUID &id )
+LLMotion::ptr_t LLCharacter::findMotion( const LLUUID &id )
 {
 	return mMotionController.findMotion( id );
 }
@@ -147,7 +147,7 @@ LLMotion* LLCharacter::findMotion( const LLUUID &id )
 // createMotion()
 // NOTE: Always assign the result to a LLPointer!
 //-----------------------------------------------------------------------------
-LLMotion* LLCharacter::createMotion( const LLUUID &id )
+LLMotion::ptr_t LLCharacter::createMotion( const LLUUID &id )
 {
 	return mMotionController.createMotion( id );
 }
@@ -174,7 +174,7 @@ BOOL LLCharacter::stopMotion(const LLUUID& id, BOOL stop_immediate)
 //-----------------------------------------------------------------------------
 BOOL LLCharacter::isMotionActive(const LLUUID& id)
 {
-	LLMotion *motionp = mMotionController.findMotion(id);
+	LLMotion::ptr_t motionp(mMotionController.findMotion(id));
 	if (motionp)
 	{
 		return mMotionController.isMotionActive(motionp);
@@ -187,7 +187,7 @@ BOOL LLCharacter::isMotionActive(const LLUUID& id)
 //-----------------------------------------------------------------------------
 // onDeactivateMotion()
 //-----------------------------------------------------------------------------
-void LLCharacter::requestStopMotion( LLMotion* motion)
+void LLCharacter::requestStopMotion(const LLMotion::ptr_t &motion)
 {
 //	LL_INFOS() << "DEBUG: Char::onDeactivateMotion( " << motionName << " )" << LL_ENDL;
 }

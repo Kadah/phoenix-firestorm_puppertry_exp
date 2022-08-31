@@ -126,7 +126,8 @@ public:
 		HIGH_PRIORITY,
 		HIGHER_PRIORITY,
 		HIGHEST_PRIORITY,
-		ADDITIVE_PRIORITY = LL_CHARACTER_MAX_PRIORITY
+		ADDITIVE_PRIORITY = LL_CHARACTER_MAX_PRIORITY,
+        PUPPET_PRIORITY = LL_CHARACTER_MAX_PRIORITY  // extra constant just for clairity. 
 	};
 
 	enum DirtyFlags
@@ -169,6 +170,7 @@ public:
     LLVector3		mEnd;
 
 	S32				mJointNum;
+    bool            mIsBone;
 
 	// child joints
 	typedef std::vector<LLJoint*> joints_t;
@@ -231,7 +233,11 @@ public:
     // joint num
 	S32 getJointNum() const { return mJointNum; }
 	void setJointNum(S32 joint_num);
-
+    
+    //Is this a bone or a collision volume/attachment
+    void setIsBone(bool is_bone);
+    bool isBone(){return mIsBone;}
+    
     // get/set support
     SupportCategory getSupport() const { return mSupport; }
     void setSupport( const SupportCategory& support) { mSupport = support; }
@@ -254,6 +260,9 @@ public:
 	void addChild( LLJoint *joint );
 	void removeChild( LLJoint *joint );
 	void removeAllChildren();
+    
+    //Tells us if this is a normal joint, leaf, or end effector
+    U32  getNumChildren();
 
 	// get/set local position
 	const LLVector3& getPosition();

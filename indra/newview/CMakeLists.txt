@@ -660,6 +660,9 @@ set(viewer_SOURCE_FILES
     llpreviewtexture.cpp
     llproductinforequest.cpp
     llprogressview.cpp
+    llpuppetevent.cpp
+    llpuppetmodule.cpp
+    llpuppetmotion.cpp
     llrecentpeople.cpp
     llregioninfomodel.cpp
     llregionposition.cpp
@@ -1423,6 +1426,9 @@ set(viewer_HEADER_FILES
     llpreviewtexture.h
     llproductinforequest.h
     llprogressview.h
+    llpuppetevent.h
+    llpuppetmodule.h
+    llpuppetmotion.h
     llrecentpeople.h
     llregioninfomodel.h
     llregionposition.h

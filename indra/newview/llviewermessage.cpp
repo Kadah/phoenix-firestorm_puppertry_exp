@@ -120,6 +120,8 @@
 #include "llpanelplaceprofile.h"
 #include "llviewerregion.h"
 #include "llfloaterregionrestarting.h"
+#include "llpuppetmodule.h"
+#include "llpuppetmotion.h"
 // [RLVa:KB] - Checked: 2010-03-09 (RLVa-1.2.0a)
 #include "rlvactions.h"
 #include "rlvhandler.h"
@@ -4696,7 +4698,8 @@ void process_kill_object(LLMessageSystem *mesgsys, void **user_data)
 				{
 					LLColor4 color(0.f,1.f,0.f,1.f);
 					gPipeline.addDebugBlip(objectp->getPositionAgent(), color);
-					LL_DEBUGS("MessageBlip") << "Kill blip for local " << local_id << " at " << objectp->getPositionAgent() << LL_ENDL;
+                    LL_DEBUGS("MessageBlip") << "Kill blip for local " << local_id << " at " << objectp->getPositionAgent() << LL_ENDL;
+
 				}
 
 				// Do the kill
@@ -5155,6 +5158,23 @@ void process_sim_stats(LLMessageSystem *msg, void **user_data)
 }
 
 
+// Common code to extract puppetry data from an avatar animation message
+static void  handle_puppetry_data(LLMessageSystem * mesgsys, LLVOAvatar * avatarp, S32 num_physav_blocks)
+{
+    LLPuppetMotion::ptr_t puppet_motion(std::static_pointer_cast<LLPuppetMotion>(avatarp->findMotion(ANIM_AGENT_PUPPET_MOTION)));
+
+    if (puppet_motion != NULL)
+    {
+        for (S32 i = 0; i < num_physav_blocks; i++)
+        {
+            S32 data_size = mesgsys->getSizeFast(_PREHASH_PhysicalAvatarEventList, i, _PREHASH_TypeData);
+            if (data_size > 0)
+            {
+                puppet_motion->unpackEvents(mesgsys, i);
+            }
+        }
+    }
+}
 
 void process_avatar_animation(LLMessageSystem *mesgsys, void **user_data)
 {
@@ -5180,6 +5200,8 @@ void process_avatar_animation(LLMessageSystem *mesgsys, void **user_data)
 
 	S32 num_blocks = mesgsys->getNumberOfBlocksFast(_PREHASH_AnimationList);
 	S32 num_source_blocks = mesgsys->getNumberOfBlocksFast(_PREHASH_AnimationSourceList);
+    S32 num_physav_blocks = mesgsys->getNumberOfBlocksFast(_PREHASH_PhysicalAvatarEventList);
+    
 
 	LL_DEBUGS("Messaging", "Motion") << "Processing " << num_blocks << " Animations" << LL_ENDL;
 
@@ -5249,15 +5271,24 @@ void process_avatar_animation(LLMessageSystem *mesgsys, void **user_data)
 									<< " Animation id: " << animation_id << LL_ENDL;
 			}
 		}
+
+        if (LLPuppetModule::instance().getEcho())
+        {
+            // Extract and process puppetry data from message
+            handle_puppetry_data(mesgsys, avatarp, num_physav_blocks);
+        }
 	}
-	else
-	{
-		for( S32 i = 0; i < num_blocks; i++ )
-		{
-			mesgsys->getUUIDFast(_PREHASH_AnimationList, _PREHASH_AnimID, animation_id, i);
-			mesgsys->getS32Fast(_PREHASH_AnimationList, _PREHASH_AnimSequenceID, anim_sequence_id, i);
-			avatarp->mSignaledAnimations[animation_id] = anim_sequence_id;
-		}
+    else
+    {
+        for (S32 i = 0; i < num_blocks; i++)
+        {
+            mesgsys->getUUIDFast(_PREHASH_AnimationList, _PREHASH_AnimID, animation_id, i);
+            mesgsys->getS32Fast(_PREHASH_AnimationList, _PREHASH_AnimSequenceID, anim_sequence_id, i);
+            avatarp->mSignaledAnimations[animation_id] = anim_sequence_id;
+        }
+
+        // Extract and process puppetry data from message
+        handle_puppetry_data(mesgsys, avatarp, num_physav_blocks);
 	}
 
 	if (num_blocks)

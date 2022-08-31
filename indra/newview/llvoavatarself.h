@@ -89,7 +89,7 @@ public:
 public:
 	/*virtual*/ bool 		hasMotionFromSource(const LLUUID& source_id);
 	/*virtual*/ void 		stopMotionFromSource(const LLUUID& source_id);
-	/*virtual*/ void 		requestStopMotion(LLMotion* motion);
+	/*virtual*/ void 		requestStopMotion(const LLMotion::ptr_t & motion);
 
 //<FS:ND> Query by JointKey rather than just a string, the key can be a U32 index for faster lookup
 //	/*virtual*/ LLJoint*	getJoint( const std::string &name );

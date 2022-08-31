@@ -116,8 +116,9 @@ BOOL LLDataPacker::packFixed(const F32 value, const char *name,
 BOOL LLDataPacker::unpackFixed(F32 &value, const char *name,
 							   const BOOL is_signed, const U32 int_bits, const U32 frac_bits)
 {
-	BOOL success = TRUE;
+	//BOOL success = TRUE;
 	//LL_INFOS() << "unpackFixed:" << name << " int:" << int_bits << " frac:" << frac_bits << LL_ENDL;
+	BOOL ok = FALSE;
 	S32 unsigned_bits = int_bits + frac_bits;
 	S32 total_bits = unsigned_bits;
 
@@ -126,32 +127,32 @@ BOOL LLDataPacker::unpackFixed(F32 &value, const char *name,
 		total_bits++;
 	}
 
-	S32 min_val;
+	//S32 min_val;
 	U32 max_val;
-	if (is_signed)
+	/*if (is_signed)
 	{
 		min_val = 1 << int_bits;
 		min_val *= -1;
-	}
+	}*/
 	max_val = 1 << int_bits;
 
 	F32 fixed_val;
 	if (total_bits <= 8)
 	{
 		U8 fixed_8;
-		success = unpackU8(fixed_8, name);
+		ok = unpackU8(fixed_8, name);
 		fixed_val = (F32)fixed_8;
 	}
 	else if (total_bits <= 16)
 	{
 		U16 fixed_16;
-		success = unpackU16(fixed_16, name);
+		ok = unpackU16(fixed_16, name);
 		fixed_val = (F32)fixed_16;
 	}
 	else if (total_bits <= 31)
 	{
 		U32 fixed_32;
-		success = unpackU32(fixed_32, name);
+		ok = unpackU32(fixed_32, name);
 		fixed_val = (F32)fixed_32;
 	}
 	else
@@ -169,7 +170,7 @@ BOOL LLDataPacker::unpackFixed(F32 &value, const char *name,
 	}
 	value = fixed_val;
 	//LL_INFOS() << "Value: " << value << LL_ENDL;
-	return success;
+	return ok;
 }
 
 BOOL LLDataPacker::unpackU16s(U16 *values, S32 count, const char *name)

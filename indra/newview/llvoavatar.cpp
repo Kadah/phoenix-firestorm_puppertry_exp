@@ -117,6 +117,8 @@
 #include "llsdserialize.h"
 #include "llcallstack.h"
 #include "llrendersphere.h"
+#include "llpuppetmotion.h"
+#include "llpuppetmodule.h"
 #include "llskinningutil.h"
 
 #include <boost/lexical_cast.hpp>
@@ -170,7 +172,7 @@ const LLUUID ANIM_AGENT_PELVIS_FIX = LLUUID("0c5dd2a2-514d-8893-d44d-05beffad208
 const LLUUID ANIM_AGENT_TARGET = LLUUID("0e4896cb-fba4-926c-f355-8720189d5b55");  //"target"
 const LLUUID ANIM_AGENT_WALK_ADJUST	= LLUUID("829bc85b-02fc-ec41-be2e-74cc6dd7215d");  //"walk_adjust"
 const LLUUID ANIM_AGENT_PHYSICS_MOTION = LLUUID("7360e029-3cb8-ebc4-863e-212df440d987");  //"physics_motion"
-
+const LLUUID ANIM_AGENT_PUPPET_MOTION = LLUUID("e6f6a440-b547-11da-a94d-0800200c9a66"); //"pupppet_motion"
 
 //-----------------------------------------------------------------------------
 // Constants
@@ -303,7 +305,7 @@ public:
 	//-------------------------------------------------------------------------
 	// static constructor
 	// all subclasses must implement such a function and register it
-	static LLMotion *create(const LLUUID &id) { return new LLBodyNoiseMotion(id); }
+	static LLMotion::ptr_t create(const LLUUID &id) { return std::make_shared<LLBodyNoiseMotion>(id); }
 
 public:
 	//-------------------------------------------------------------------------
@@ -411,7 +413,7 @@ public:
 	//-------------------------------------------------------------------------
 	// static constructor
 	// all subclasses must implement such a function and register it
-	static LLMotion *create(const LLUUID &id) { return new LLBreatheMotionRot(id); }
+	static LLMotion::ptr_t create(const LLUUID &id) { return std::make_shared<LLBreatheMotionRot>(id); }
 
 public:
 	//-------------------------------------------------------------------------
@@ -524,7 +526,7 @@ public:
 	//-------------------------------------------------------------------------
 	// static constructor
 	// all subclasses must implement such a function and register it
-	static LLMotion *create(const LLUUID& id) { return new LLPelvisFixMotion(id); }
+	static LLMotion::ptr_t create(const LLUUID& id) { return std::make_shared<LLPelvisFixMotion>(id); }
 
 public:
 	//-------------------------------------------------------------------------
@@ -941,6 +943,12 @@ BOOL LLVOAvatar::isFullyBaked()
 	return TRUE;
 }
 
+LLPuppetMotion::ptr_t LLVOAvatar::getPuppetMotion()
+{
+	return std::static_pointer_cast<LLPuppetMotion>(findMotion(ANIM_AGENT_PUPPET_MOTION));
+}
+
+
 BOOL LLVOAvatar::isFullyTextured() const
 {
 	for (S32 i = 0; i < mMeshLOD.size(); i++)
@@ -1215,6 +1223,7 @@ void LLVOAvatar::initClass()
 	gAnimLibrary.animStateSetString(ANIM_AGENT_PELVIS_FIX,"pelvis_fix");
 	gAnimLibrary.animStateSetString(ANIM_AGENT_TARGET,"target");
 	gAnimLibrary.animStateSetString(ANIM_AGENT_WALK_ADJUST,"walk_adjust");
+	gAnimLibrary.animStateSetString(ANIM_AGENT_PUPPET_MOTION,"puppet_motion");
 
     // Where should this be set initially?
     LLJoint::setDebugJointNames(gSavedSettings.getString("DebugAvatarJoints"));
@@ -1314,7 +1323,6 @@ void LLVOAvatar::initInstance()
 		registerMotion( ANIM_AGENT_TURNRIGHT,				LLKeyframeWalkMotion::create );
 		registerMotion( ANIM_AGENT_WALK,					LLKeyframeWalkMotion::create );
 		registerMotion( ANIM_AGENT_WALK_NEW,				LLKeyframeWalkMotion::create );
-		
 		// motions without a start/stop bit
 		registerMotion( ANIM_AGENT_BODY_NOISE,				LLBodyNoiseMotion::create );
 		registerMotion( ANIM_AGENT_BREATHE_ROT,				LLBreatheMotionRot::create );
@@ -1329,14 +1337,26 @@ void LLVOAvatar::initInstance()
 		registerMotion( ANIM_AGENT_SIT_FEMALE,				LLKeyframeMotion::create );
 		registerMotion( ANIM_AGENT_TARGET,					LLTargetingMotion::create );
 		registerMotion( ANIM_AGENT_WALK_ADJUST,				LLWalkAdjustMotion::create );
+        registerMotion( ANIM_AGENT_PUPPET_MOTION,           LLPuppetMotion::create );
 	}
 	
 	LLAvatarAppearance::initInstance();
 	
 	// preload specific motions here
+
 	createMotion( ANIM_AGENT_CUSTOMIZE);
 	createMotion( ANIM_AGENT_CUSTOMIZE_DONE);
-	
+	createMotion(ANIM_AGENT_PUPPET_MOTION);
+
+	LLPuppetMotion::ptr_t puppet_motion = getPuppetMotion();
+    if (puppet_motion)
+    {
+		puppet_motion->setAvatar(this);
+    }
+	else
+	{
+		LL_WARNS("Puppet") << "Missing puppet motion when initializing avatar" << LL_ENDL;
+	}
 	//VTPause();  // VTune
 	
 	mVoiceVisualizer->setVoiceEnabled( LLVoiceClient::getInstance()->getVoiceEnabled( mID ) );
@@ -1370,7 +1390,6 @@ LLTexLayerSet* LLVOAvatar::createTexLayerSet()
 
 const LLVector3 LLVOAvatar::getRenderPosition() const
 {
-
 	if (mDrawable.isNull() || mDrawable->getGeneration() < 0)
 	{
 		return getPositionAgent();
@@ -1638,7 +1657,10 @@ void LLVOAvatar::calculateSpatialExtents(LLVector4a& newMin, LLVector4a& newMax)
     mPixelArea = LLPipeline::calcPixelArea(center, size, *LLViewerCamera::getInstance());
 }
 
-void render_sphere_and_line(const LLVector3& begin_pos, const LLVector3& end_pos, F32 sphere_scale, const LLVector3& occ_color, const LLVector3& visible_color)
+void render_sphere_and_line(const LLVector3& begin_pos, const LLVector3& end_pos,
+                            F32 sphere_scale,
+                            const LLVector3& occ_color, const LLVector3& visible_color,
+                            F32 line_width)
 {
     // Unoccluded bone portions
     LLGLDepthTest normal_depth(GL_TRUE);
@@ -1647,6 +1669,7 @@ void render_sphere_and_line(const LLVector3& begin_pos, const LLVector3& end_pos
     gGL.diffuseColor3f(visible_color[0], visible_color[1], visible_color[2]);
 
     gGL.begin(LLRender::LINES);
+    glLineWidth(line_width);
     gGL.vertex3fv(begin_pos.mV); 
     gGL.vertex3fv(end_pos.mV);
     gGL.end();
@@ -1697,6 +1720,7 @@ void LLVOAvatar::renderCollisionVolumes()
         LLVector3 end_pos(collision_volume.getEnd());
         static F32 sphere_scale = 1.0f;
         static F32 center_dot_scale = 0.05f;
+        static F32 line_width = 1.0f;
 
         static LLVector3 BLUE(0.0f, 0.0f, 1.0f);
         static LLVector3 PASTEL_BLUE(0.5f, 0.5f, 1.0f);
@@ -1719,8 +1743,8 @@ void LLVOAvatar::renderCollisionVolumes()
             cv_color_occluded = BLUE;
             cv_color_visible = PASTEL_BLUE;
         }
-        render_sphere_and_line(begin_pos, end_pos, sphere_scale, cv_color_occluded, cv_color_visible);
-        render_sphere_and_line(begin_pos, end_pos, center_dot_scale, dot_color_occluded, dot_color_visible);
+        render_sphere_and_line(begin_pos, end_pos, sphere_scale, cv_color_occluded, cv_color_visible, line_width);
+        render_sphere_and_line(begin_pos, end_pos, center_dot_scale, dot_color_occluded, dot_color_visible, line_width);
 
         gGL.popMatrix();
     }
@@ -1750,6 +1774,9 @@ void LLVOAvatar::renderBones(const std::string &selected_joint)
     // For bones which are rigged to by at least one attachment
     static LLVector3 RIGGED_COLOR_OCCLUDED(0.0f, 1.0f, 1.0f);
     static LLVector3 RIGGED_COLOR_VISIBLE(0.5f, 0.5f, 0.5f);
+    // For bones which have active puppetry data
+    static LLVector3 PUPPETRY_COLOR_OCCLUDED(0.0f, 0.0f, 1.0f);
+    static LLVector3 PUPPETRY_COLOR_VISIBLE(0.5f, 0.5f, 0.5f);
     // For bones not otherwise colored
     static LLVector3 OTHER_COLOR_OCCLUDED(0.0f, 1.0f, 0.0f);
     static LLVector3 OTHER_COLOR_VISIBLE(0.5f, 0.5f, 0.5f);
@@ -1777,9 +1804,14 @@ void LLVOAvatar::renderBones(const std::string &selected_joint)
         // is low priority
         if (jointp->getName() == selected_joint)
         {
-            sphere_scale *= 16.f;
+            sphere_scale *= 16;
             occ_color = SELECTED_COLOR_OCCLUDED;
             visible_color = SELECTED_COLOR_VISIBLE;
+        }
+        else if (LLPuppetModule::instance().isActiveJoint(jointp->getName()))
+        {   // Joint is positioned by puppetry
+            occ_color = PUPPETRY_COLOR_OCCLUDED;
+            visible_color = PUPPETRY_COLOR_VISIBLE;
         }
         else if (jointp->hasAttachmentPosOverride(pos,mesh_id))
         {
@@ -1806,7 +1838,8 @@ void LLVOAvatar::renderBones(const std::string &selected_joint)
 		gGL.pushMatrix();
 		gGL.multMatrix( &jointp->getXform()->getWorldMatrix().mMatrix[0][0] );
 
-        render_sphere_and_line(begin_pos, end_pos, sphere_scale, occ_color, visible_color);
+        F32 line_width = 4.0f;
+        render_sphere_and_line(begin_pos, end_pos, sphere_scale, occ_color, visible_color, line_width);
         
 		gGL.popMatrix();
 	}
@@ -2092,6 +2125,7 @@ void LLVOAvatar::startDefaultMotions()
 	startMotion( ANIM_AGENT_PHYSICS_MOTION );
 	startMotion( ANIM_AGENT_HAND_MOTION );
 	startMotion( ANIM_AGENT_PELVIS_FIX );
+    startMotion( ANIM_AGENT_PUPPET_MOTION );
 
 	//-------------------------------------------------------------------------
 	// restart any currently active motions
@@ -4497,7 +4531,7 @@ void LLVOAvatar::updateAnimationDebugText()
 	for (LLMotionController::motion_list_t::iterator iter = mMotionController.getActiveMotions().begin();
 		 iter != mMotionController.getActiveMotions().end(); ++iter)
 	{
-		LLMotion* motionp = *iter;
+		LLMotion::ptr_t motionp = *iter;
 		if (motionp->getMinPixelArea() < getPixelArea())
 		{
 			std::string output;
@@ -4810,6 +4844,7 @@ void LLVOAvatar::computeUpdatePeriod()
 //------------------------------------------------------------------------
 void LLVOAvatar::updateOrientation(LLAgent& agent, F32 speed, F32 delta_time)
 {
+    //This will be more useful for full-body tracking.
 			LLQuaternion iQ;
 			LLVector3 upDir( 0.0f, 0.0f, 1.0f );
 			
@@ -5288,7 +5323,7 @@ bool LLVOAvatar::updateCharacter(LLAgent &agent)
 	else if (!getParent() && isSitting() && !isMotionActive(ANIM_AGENT_SIT_GROUND_CONSTRAINED))
 	{
         // If we are starting up, motion might be loading
-        LLMotion *motionp = mMotionController.findMotion(ANIM_AGENT_SIT_GROUND_CONSTRAINED);
+		LLMotion::ptr_t motionp(gAgentAvatarp->findMotion(ANIM_AGENT_SIT_GROUND_CONSTRAINED));
         if (!motionp || !mMotionController.isMotionLoading(motionp))
         {
             getOffObject();
@@ -7029,7 +7064,7 @@ LLJoint *LLVOAvatar::getJoint( S32 joint_num )
             }
         }
     }
-    
+
 	llassert(!pJoint || pJoint->getJointNum() == joint_num);
     return pJoint;
 }
@@ -7717,7 +7752,7 @@ LLVector3	LLVOAvatar::getPosAgentFromGlobal(const LLVector3d &position)
 // requestStopMotion()
 //-----------------------------------------------------------------------------
 // virtual
-void LLVOAvatar::requestStopMotion( LLMotion* motion )
+void LLVOAvatar::requestStopMotion(const LLMotion::ptr_t &motion )
 {
 	// Only agent avatars should handle the stop motion notifications.
 }
@@ -9169,6 +9204,16 @@ BOOL LLVOAvatar::processFullyLoadedChange(bool loading)
 	mFullyLoadedInitialized = TRUE;
 	mFullyLoadedFrameCounter++;
 
+    if (fully_loaded_changed)
+    {
+	    LLPuppetMotion::ptr_t puppet_motion = getPuppetMotion();
+        if (puppet_motion)
+        {
+            puppet_motion->reconfigureJoints();
+            LLEventPumps::instance().obtain("SkeletonUpdate").post(LLSD());
+        }
+    }
+
     if (changed && isSelf())
     {
         // to know about outfit switching
@@ -9312,7 +9357,7 @@ bool LLVOAvatar::isTooComplex() const
 //-----------------------------------------------------------------------------
 // findMotion()
 //-----------------------------------------------------------------------------
-LLMotion* LLVOAvatar::findMotion(const LLUUID& id) const
+LLMotion::ptr_t LLVOAvatar::findMotion(const LLUUID& id) const
 {
 	return mMotionController.findMotion(id);
 }
