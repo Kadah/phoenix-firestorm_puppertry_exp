@@ -94,8 +94,7 @@
        label="Picks"
        name="Picks">
         <menu_item_call.on_click
-         function="Floater.Show"
-         parameter="picks" />
+         function="ShowAgentProfilePicks" />
         </menu_item_call>
 
       <menu_item_call
@@ -486,6 +485,18 @@
 	            <menu_item_call.on_click
                 function="Tools.Undeform" />
 	        </menu_item_call>
+            <menu_item_call 
+               label="Reset skeleton"
+               name="Reset Skeleton">
+               <menu_item_call.on_click
+                function="Avatar.ResetSkeleton" />
+            </menu_item_call>
+            <menu_item_call 
+                label="Reset skeleton and animations"
+                name="Reset Skeleton And Animations">
+                <menu_item_call.on_click
+                 function="Avatar.ResetSelfSkeletonAndAnimations" />
+            </menu_item_call>
 	        <menu_item_call
 	         label="Force Appearance Update (Rebake)"
 	         name="Rebake Texture"
@@ -2507,7 +2518,7 @@
                  function="ReportAbuse" />
             </menu_item_call>
         <menu_item_call
-             label="Report Bug"
+             label="Report Problem"
              name="Report Bug">
                 <menu_item_call.on_click
                  function="Advanced.ReportBug"/>
@@ -3848,20 +3859,21 @@
              name="Profiling">
                 <menu_item_check.on_check
                  function="CheckControl"
-                 parameter="FSTelemetryActive" />
+                 parameter="ProfilingActive" />
                 <menu_item_check.on_click
-                 function="Develop.ToggleTelemetry"
-                 parameter="FSTelemetryActive" />
+                 function="Develop.ToggleProfiling" />
+                <menu_item_check.on_enable
+                 function="Develop.EnableProfiling" />
             </menu_item_check>
             <menu_item_check
              label="Start when connected"
              name="Start when telemetry client connects">
                 <menu_item_check.on_check
                  function="CheckControl"
-                 parameter="FSTelemetryEnableWhenConnected" />
+                 parameter="DeferProfilingUntilConnected" />
                 <menu_item_check.on_click
                  function="ToggleControl"
-                 parameter="FSTelemetryEnableWhenConnected" />
+                 parameter="DeferProfilingUntilConnected" />
             </menu_item_check>
         </menu>
 
@@ -4388,14 +4400,14 @@
           <menu_item_separator />
 
           <menu_item_check
-             label="Debug GL"
+             label="Start Debug GL on next run"
              name="Debug GL">
                 <menu_item_check.on_check
                  function="CheckControl"
-                 parameter="RenderDebugGL" />
+                 parameter="RenderDebugGLSession" />
                 <menu_item_check.on_click
                  function="ToggleControl"
-                 parameter="RenderDebugGL" />
+                 parameter="RenderDebugGLSession" />
             </menu_item_check>
             <menu_item_check
              label="Debug Pipeline"

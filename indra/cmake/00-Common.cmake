@@ -49,8 +49,8 @@ if(NON_RELEASE_CRASH_REPORTING)
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DLL_SEND_CRASH_REPORTS=1")
 endif()  
 
-# Don't bother with a MinSizeRel build.
-set(CMAKE_CONFIGURATION_TYPES "RelWithDebInfo;Release;Debug" CACHE STRING
+# Don't bother with MinSizeRel or Debug builds.
+set(CMAKE_CONFIGURATION_TYPES "RelWithDebInfo;Release" CACHE STRING
     "Supported build types." FORCE)
 
 
@@ -87,12 +87,18 @@ if (WINDOWS)
   #if( ADDRESS_SIZE EQUAL 32 )
     #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /p:PreferredToolArchitecture=x64")  
   #endif()
+  
+  # Preserve first-pass-through versions (ie no FORCE overwrite). Prevents recursive addition of /Zo (04/2021)
+  set(OG_CMAKE_CXX_FLAGS_RELEASE ${CMAKE_CXX_FLAGS_RELEASE} CACHE STRING "OG_CXX_FLAGS_RELEASE")
+  set(OG_CMAKE_CXX_FLAGS_RELWITHDEBINFO ${CMAKE_CXX_FLAGS_RELWITHDEBINFO} CACHE STRING "OG_CXX_FLAGS_RELWITHDEBINFO")
+
   set(CMAKE_CXX_FLAGS_RELWITHDEBINFO 
-      "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} /Zo"
+      "${OG_CMAKE_CXX_FLAGS_RELWITHDEBINFO} /Zo"
       CACHE STRING "C++ compiler release-with-debug options" FORCE)
   set(CMAKE_CXX_FLAGS_RELEASE
-      "${CMAKE_CXX_FLAGS_RELEASE} ${LL_CXX_FLAGS} /Zo"
+      "${OG_CMAKE_CXX_FLAGS_RELEASE} ${LL_CXX_FLAGS} /Zo"
       CACHE STRING "C++ compiler release options" FORCE)
+  
   # zlib has assembly-language object files incompatible with SAFESEH
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /LARGEADDRESSAWARE /SAFESEH:NO /NODEFAULTLIB:LIBCMT /IGNORE:4099")
 
@@ -103,38 +109,6 @@ if (WINDOWS)
       /DNOMINMAX
 #      /DDOM_DYNAMIC            # For shared library colladadom
       )
-
-  # <FS:Ansariel> AVX/AVX2 support
-  if (USE_AVX_OPTIMIZATION)
-  add_compile_options(
-      /GS
-      /TP
-      /W3
-      /c
-      /Zc:forScope
-      /nologo
-      /Oy-
-      /Oi
-      /Ot
-      /arch:AVX
-      /fp:fast
-      )
-  elseif (USE_AVX2_OPTIMIZATION)
-  add_compile_options(
-      /GS
-      /TP
-      /W3
-      /c
-      /Zc:forScope
-      /nologo
-      /Oy-
-      /Oi
-      /Ot
-      /arch:AVX2
-      /fp:fast
-      )
-  else (USE_AVX_OPTIMIZATION)
-  # </FS:Ansariel> AVX/AVX2 support
   add_compile_options(
       /GS
       /TP
@@ -148,13 +122,20 @@ if (WINDOWS)
 #      /arch:SSE2
       /fp:fast
       )
-  # Nicky: x64 implies SSE2
-  if( ADDRESS_SIZE EQUAL 32 )
-    add_definitions( /arch:SSE2 )
-  endif()
+
   # <FS:Ansariel> AVX/AVX2 support
+  if (USE_AVX_OPTIMIZATION)
+    add_compile_options(/arch:AVX)
+  elseif (USE_AVX2_OPTIMIZATION)
+    add_compile_options(/arch:AVX2)
+  else (USE_AVX_OPTIMIZATION)
+    # Nicky: x64 implies SSE2
+    if (ADDRESS_SIZE EQUAL 32)
+      add_compile_options(/arch:SSE2)
+    endif()
   endif (USE_AVX_OPTIMIZATION)
-     
+  # </FS:Ansariel> AVX/AVX2 support
+
   # Are we using the crummy Visual Studio KDU build workaround?
   if (NOT VS_DISABLE_FATAL_WARNINGS)
     add_definitions(/WX)
@@ -270,9 +251,13 @@ if (LINUX OR DARWIN)
     set(GCC_CXX_WARNINGS "$[GCC_WARNINGS] -Wno-reorder -Wno-unused-const-variable -Wno-format-extra-args -Wno-unused-private-field -Wno-unused-function -Wno-tautological-compare -Wno-empty-body -Wno-unused-variable -Wno-unused-value")
   else (${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang" AND DARWIN AND XCODE_VERSION GREATER 4.9)
   #elseif (${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
-    set(GCC_CXX_WARNINGS "${GCC_WARNINGS} -Wno-reorder -Wno-non-virtual-dtor")
+    set(GCC_CXX_WARNINGS "${GCC_WARNINGS} -Wno-reorder -Wno-non-virtual-dtor -Wno-unused-variable")
   endif ()
 
+  if(LINUX)
+    set(GCC_CXX_WARNINGS "${GCC_WARNINGS} -Wno-reorder -Wno-non-virtual-dtor -Wno-unused-variable -Wno-unused-but-set-variable -Wno-pragmas -Wno-deprecated")
+  endif()
+  
   set(CMAKE_C_FLAGS "${GCC_WARNINGS} ${CMAKE_C_FLAGS}")
   set(CMAKE_CXX_FLAGS "${GCC_CXX_WARNINGS} ${CMAKE_CXX_FLAGS}")
 

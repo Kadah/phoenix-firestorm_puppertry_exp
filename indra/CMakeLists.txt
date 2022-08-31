@@ -6,8 +6,10 @@
 ## 3.8 added VS_DEBUGGER_WORKING_DIRECTORY support
 cmake_minimum_required(VERSION 3.12.0 FATAL_ERROR)
 
-set(ROOT_PROJECT_NAME "SecondLife" CACHE STRING
-    "The root project/makefile/solution name. Defaults to SecondLife.")
+set(CMAKE_CXX_STANDARD 17) #<FS> Enable c++17 on all platforms
+
+set(ROOT_PROJECT_NAME "Firestorm" CACHE STRING
+    "The root project/makefile/solution name. Defaults to Firestorm.")
 project(${ROOT_PROJECT_NAME})
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
@@ -21,8 +23,8 @@ if (WINDOWS)
 endif (WINDOWS)
 
 if (NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING
-      "Build type.  One of: Debug Release RelWithDebInfo" FORCE)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING
+      "Build type.  One of: Release RelWithDebInfo" FORCE)
 endif (NOT CMAKE_BUILD_TYPE)
 
 #<FS:AW optional opensim support>
@@ -77,12 +79,12 @@ endif (USE_AVX_OPTIMIZATION)
 add_subdirectory(cmake)
 
 # <FS:Beq> Tracy Profiler support
-option(USE_TRACY_PROFILER "Tracy Profiler support" OFF)
-if (USE_TRACY_PROFILER)
+option(USE_TRACY "Tracy Profiler support" OFF)
+if (USE_TRACY)
   message(STATUS "Compiling with Tracy profiler")
-else (USE_TRACY_PROFILER)
+else (USE_TRACY)
   message(STATUS "Compiling without Tracy profiler")
-endif (USE_TRACY_PROFILER)
+endif (USE_TRACY)
 # </FS:Beq> Tracy Profiler support
 
 add_subdirectory(${LIBS_OPEN_PREFIX}llaudio)
@@ -95,6 +97,7 @@ add_subdirectory(${LIBS_OPEN_PREFIX}llkdu)
 add_subdirectory(${LIBS_OPEN_PREFIX}llimagej2coj)
 add_subdirectory(${LIBS_OPEN_PREFIX}llinventory)
 add_subdirectory(${LIBS_OPEN_PREFIX}llmath)
+add_subdirectory(${LIBS_OPEN_PREFIX}llmeshoptimizer)
 add_subdirectory(${LIBS_OPEN_PREFIX}llmessage)
 add_subdirectory(${LIBS_OPEN_PREFIX}llprimitive)
 add_subdirectory(${LIBS_OPEN_PREFIX}llrender)
@@ -135,6 +138,12 @@ if (LINUX)
       include(LLAppearanceUtility)
       add_subdirectory(${LLAPPEARANCEUTILITY_SRC_DIR} ${LLAPPEARANCEUTILITY_BIN_DIR})
   endif (INSTALL_PROPRIETARY)
+#  add_dependencies(viewer linux-crash-logger-strip-target)
+elseif (WINDOWS)
+  # cmake EXISTS requires an absolute path, see indra/cmake/Variables.cmake
+  if (EXISTS ${VIEWER_DIR}win_setup)
+    add_subdirectory(${VIEWER_DIR}win_setup)
+  endif (EXISTS ${VIEWER_DIR}win_setup)
 endif (LINUX)
 
 if (WINDOWS)

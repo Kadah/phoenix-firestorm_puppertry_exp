@@ -3,22 +3,15 @@
 include(APR)
 include(Boost)
 include(EXPAT)
-include(ZLIB)
-include(Tracy) # <FS:Beq> Tracy profiler
+include(Tracy)
+include(ZLIBNG)
 
-# <FS:Beq> Add Tracy profiler support
-#set(LLCOMMON_INCLUDE_DIRS
-#    ${LIBS_OPEN_DIR}/llcommon
-#    ${APRUTIL_INCLUDE_DIR}
-#    ${APR_INCLUDE_DIR}
-#    )
 set(LLCOMMON_INCLUDE_DIRS
     ${LIBS_OPEN_DIR}/llcommon
     ${APRUTIL_INCLUDE_DIR}
     ${APR_INCLUDE_DIR}
     ${TRACY_INCLUDE_DIR}
     )
-# </FS:Beq>
 set(LLCOMMON_SYSTEM_INCLUDE_DIRS
     ${Boost_INCLUDE_DIRS}
     )
@@ -39,7 +32,8 @@ else (LINUX)
         ${BOOST_FIBER_LIBRARY} 
         ${BOOST_CONTEXT_LIBRARY} 
         ${BOOST_THREAD_LIBRARY} 
-        ${BOOST_SYSTEM_LIBRARY} )
+        ${BOOST_SYSTEM_LIBRARY}
+        )
 endif (LINUX)
 
 set(LLCOMMON_LINK_SHARED OFF CACHE BOOL "Build the llcommon target as a static library.")

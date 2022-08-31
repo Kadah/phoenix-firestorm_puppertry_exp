@@ -48,6 +48,7 @@
 #include "llui.h"
 #include "llviewerinventory.h"
 #include "llpermissions.h"
+#include "llpreviewtexture.h"
 #include "llsaleinfo.h"
 #include "llassetstorage.h"
 #include "lltextbox.h"
@@ -80,6 +81,67 @@ static const S32 LOCAL_TRACKING_ID_COLUMN = 1;
 //static const char CURRENT_IMAGE_NAME[] = "Current Texture";
 //static const char WHITE_IMAGE_NAME[] = "Blank Texture";
 //static const char NO_IMAGE_NAME[] = "None";
+
+
+
+//static
+bool get_is_predefined_texture(LLUUID asset_id)
+{
+    if (asset_id == LLUUID(gSavedSettings.getString("DefaultObjectTexture"))
+        || asset_id == LLUUID(gSavedSettings.getString("UIImgWhiteUUID"))
+        || asset_id == LLUUID(gSavedSettings.getString("UIImgInvisibleUUID"))
+        || asset_id == LLUUID(SCULPT_DEFAULT_TEXTURE))
+    {
+        return true;
+    }
+    return false;
+}
+
+LLUUID get_copy_free_item_by_asset_id(LLUUID asset_id, bool no_trans_perm)
+{
+    LLViewerInventoryCategory::cat_array_t cats;
+    LLViewerInventoryItem::item_array_t items;
+    LLAssetIDMatches asset_id_matches(asset_id);
+    gInventory.collectDescendentsIf(LLUUID::null,
+        cats,
+        items,
+        LLInventoryModel::INCLUDE_TRASH,
+        asset_id_matches);
+    
+    LLUUID res;
+    if (items.size())
+    {
+        for (S32 i = 0; i < items.size(); i++)
+        {
+            LLViewerInventoryItem* itemp = items[i];
+            if (itemp)
+            {
+                LLPermissions item_permissions = itemp->getPermissions();
+                if (item_permissions.allowOperationBy(PERM_COPY,
+                    gAgent.getID(),
+                    gAgent.getGroupID()))
+                {
+                    bool allow_trans = item_permissions.allowOperationBy(PERM_TRANSFER, gAgent.getID(), gAgent.getGroupID());
+                    if (allow_trans != no_trans_perm)
+                    {
+                        return itemp->getUUID();
+                    }
+                    res = itemp->getUUID();
+                }
+            }
+        }
+    }
+    return res;
+}
+
+bool get_can_copy_texture(LLUUID asset_id)
+{
+    // User is allowed to copy a texture if:
+    // library asset or default texture,
+    // or copy perm asset exists in user's inventory
+
+    return get_is_predefined_texture(asset_id) || get_copy_free_item_by_asset_id(asset_id).notNull();
+}
 
 LLFloaterTexturePicker::LLFloaterTexturePicker(	
 	LLView* owner,
@@ -1319,14 +1381,13 @@ LLTextureCtrl::LLTextureCtrl(const LLTextureCtrl::Params& p)
 	mNeedsRawImageData( FALSE ),
 	mValid( TRUE ),
 	mShowLoadingPlaceholder( TRUE ),
+	mOpenTexPreview(!p.enabled),  // <FS:Ansariel> For texture preview mode
 	mImageAssetID(p.image_id),
 	mDefaultImageAssetID(p.default_image_id),
 	mDefaultImageName(p.default_image_name),
 	mFallbackImage(p.fallback_image),
 	// <FS:Ansariel> Mask texture if desired
-	mIsMasked(FALSE),
-	// </FS:Ansariel> Mask texture if desired
-	mPreviewMode(!p.enabled) // <FS:Ansariel> For texture preview mode
+	mIsMasked(FALSE)
 {
 
 	// Default of defaults is white image for diff tex
@@ -1452,7 +1513,7 @@ void LLTextureCtrl::setEnabled( BOOL enabled )
 	// <FS:Ansariel> Texture preview mode
 	//LLView::setEnabled( enabled );
 	LLView::setEnabled( (enabled || getValue().asUUID().notNull()) );
-	mPreviewMode = !enabled;
+	mOpenTexPreview = !enabled;
 	// </FS:Ansariel>
 }
 
@@ -1590,13 +1651,7 @@ BOOL LLTextureCtrl::handleMouseDown(S32 x, S32 y, MASK mask)
 
 	if (!handled && mBorder->parentPointInView(x, y))
 	{
-		// <FS:Ansariel> Texture preview mode
-		//showPicker(FALSE);
-		////grab textures first...
-		//LLInventoryModelBackgroundFetch::instance().start(gInventory.findCategoryUUIDForType(LLFolderType::FT_TEXTURE));
-		////...then start full inventory fetch.
-		//LLInventoryModelBackgroundFetch::instance().start();
-		if (!mPreviewMode)
+		if (!mOpenTexPreview)
 		{
 			showPicker(FALSE);
 			//grab textures first...
@@ -1604,6 +1659,23 @@ BOOL LLTextureCtrl::handleMouseDown(S32 x, S32 y, MASK mask)
 			//...then start full inventory fetch.
 			LLInventoryModelBackgroundFetch::instance().start();
 		}
+		// <FS:Ansariel> Texture preview mode
+		//else
+		//{
+		//	if (getImageAssetID().notNull())
+		//	{
+		//		LLPreviewTexture* preview_texture = LLFloaterReg::showTypedInstance<LLPreviewTexture>("preview_texture", getValue());
+		//		if (preview_texture && !preview_texture->isDependent())
+		//		{
+		//			LLFloater* root_floater = gFloaterView->getParentFloater(this);
+		//			if (root_floater)
+		//			{
+		//				root_floater->addDependentFloater(preview_texture);
+		//				preview_texture->hideCtrlButtons();
+		//			}
+		//		}
+		//	}
+		//}
 		else if (!mIsMasked)
 		{
 			// Open the preview floater for the texture
@@ -1750,7 +1822,7 @@ BOOL LLTextureCtrl::handleDragAndDrop(S32 x, S32 y, MASK mask,
 
 	// <FS:Ansariel> FIRE-10125: Texture picker allows dragging of textures while in preview mode
 	//if (getEnabled() &&
-	if (getEnabled() && !mPreviewMode &&
+	if (getEnabled() && !mOpenTexPreview &&
 	// </FS:Ansariel>
 		((cargo_type == DAD_TEXTURE) || is_mesh) &&
 		 allowDrop(item))
@@ -1966,7 +2038,7 @@ BOOL LLTextureCtrl::handleUnicodeCharHere(llwchar uni_char)
 	{
 		// <FS:Ansariel> Texture preview mode
 		//showPicker(TRUE);
-		if (!mPreviewMode)
+		if (!mOpenTexPreview)
 		{
 			showPicker(TRUE);
 			//grab textures first...
@@ -1994,7 +2066,7 @@ void LLTextureCtrl::setValue( const LLSD& value )
 	//setImageAssetID(value.asUUID());
 	LLUUID uuid = value.asUUID();
 	setImageAssetID(uuid);
-	LLView::setEnabled( (!mPreviewMode || uuid.notNull()) );
+	LLView::setEnabled( (!mOpenTexPreview || uuid.notNull()) );
 	// </FS:Ansariel>
 }
 

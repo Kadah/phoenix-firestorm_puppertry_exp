@@ -1,5 +1,17 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes" ?>
 <panel label="Tekstura" name="Texture">
+	<panel.string name="paste_error_face_selection_mismatch">
+		Gdy kopiowanych jest wiele stron, to obiekt docelowy musi mieć wybraną taką samą ich liczbę.
+	</panel.string>
+	<panel.string name="paste_error_object_face_count_mismatch">
+		Gdy kopiowane są wszystkie strony, to obiekt docelowy musi mieć taką samą ich liczbę.
+	</panel.string>
+	<panel.string name="paste_error_inventory_not_found">
+		Nie znaleziono jednej lub więcej tekstur.
+	</panel.string>
+	<panel.string name="paste_options">
+		Skopiuj parametry tekstury do schowka
+	</panel.string>
 	<text name="color label">
 		Kolor
 	</text>
@@ -11,14 +23,16 @@
 		Blask
 	</text>
 	<check_box label="Pełna jasność" name="checkbox fullbright" />
+	<button name="copy_face_btn" tool_tip="Skopiuj parametry tekstury do schowka" />
+	<button name="paste_face_btn" tool_tip="Wklej parametry tekstury ze schowka" />
 	<combo_box name="combobox matmedia">
 		<combo_box.item label="Materiały" name="Materials" />
 		<combo_box.item label="Media" name="Media" />
 	</combo_box>
 	<radio_group name="radio_material_type">
-		<radio_item label="Tekstura (rozproszenie)" name="Texture (diffuse)" />
-		<radio_item label="Powierzchnia (normalne)" name="Bumpiness (normal)" />
-		<radio_item label="Lśnienie (odbicie)" name="Shininess (specular)" />
+		<radio_item label="Tekstura (diffuse)" name="Texture (diffuse)" />
+		<radio_item label="Powierzchnia (normal)" name="Bumpiness (normal)" />
+		<radio_item label="Lśnienie (specular)" name="Shininess (specular)" />
 	</radio_group>
 	<texture_picker label="Tekstura" name="texture control" tool_tip="Kliknij, aby wybrać obraz" />
 	<text name="label alphamode">
@@ -113,6 +127,4 @@
 	<check_box label="Równaj powierzchnie planarne" name="checkbox planar align" tool_tip="Wyrównuj tekstury na wszystkich wybranych powierzchniach z powierzchnią wybraną jako ostatnia. Wymaga planarnego mapowania tekstur." />
 	<check_box label="Synchronizuj materiały" name="checkbox_sync_settings" tool_tip="Synchronizuj parametry map tekstur" />
 	<button label="Wyrównaj" name="button align textures" tool_tip="Wyrównaj bieżące warstwy tekstury" />
-	<button label="Kopia" name="copytextures" />
-	<button label="Wklej" name="pastetextures" />
 </panel>

@@ -35,16 +35,13 @@
 #else
 #	include <sys/stat.h>		// mkdir()
 #endif
+#include <memory>                   // std::unique_ptr
 
 #include "llviewermedia_streamingaudio.h"
 #include "llaudioengine.h"
 
 #ifdef LL_FMODSTUDIO
 # include "llaudioengine_fmodstudio.h"
-#endif
-
-#ifdef LL_SDL2
-#include "llaudioengine_sdl2.h"
 #endif
 
 #ifdef LL_OPENAL
@@ -100,6 +97,7 @@
 #include "llfloateravatarpicker.h"
 #include "llcallbacklist.h"
 #include "llcallingcard.h"
+#include "llclassifiedinfo.h"
 #include "llconsole.h"
 #include "llcontainerview.h"
 #include "llconversationlog.h"
@@ -131,8 +129,6 @@
 // <FS:Ansariel> [FS Login Panel]
 #include "llmutelist.h"
 #include "llavatarpropertiesprocessor.h"
-#include "llpanelclassified.h"
-#include "llpanelpick.h"
 #include "llpanelgrouplandmoney.h"
 #include "llpanelgroupnotices.h"
 #include "llparcel.h"
@@ -187,7 +183,6 @@
 #include "pipeline.h"
 #include "llappviewer.h"
 #include "llfasttimerview.h"
-#include "lltelemetry.h"
 #include "llfloatermap.h"
 #include "llweb.h"
 #include "llvoiceclient.h"
@@ -202,6 +197,7 @@
 #include "llavatariconctrl.h"
 #include "llvoicechannel.h"
 #include "llpathfindingmanager.h"
+#include "llremoteparcelrequest.h"
 // [RLVa:KB] - Checked: RLVa-1.2.0
 #include "rlvhandler.h"
 // [/RLVa:KB]
@@ -217,6 +213,9 @@
 
 #include "llstacktrace.h"
 #include "fsperfstats.h"
+#include "threadpool.h"
+
+
 #if LL_WINDOWS
 #include "lldxhardware.h"
 #endif
@@ -248,6 +247,7 @@
 #include "lggcontactsets.h"
 #include "llfloatersearch.h"
 #include "llfloatersidepanelcontainer.h"
+#include "llfriendcard.h"
 #include "llnotificationmanager.h"
 #include "llpresetsmanager.h"
 #include "llprogressview.h"
@@ -302,9 +302,9 @@ static bool mBenefitsSuccessfullyInit = false;
 
 const F32 STATE_AGENT_WAIT_TIMEOUT = 240; //seconds
 
-boost::scoped_ptr<LLEventPump> LLStartUp::sStateWatcher(new LLEventStream("StartupState"));
-boost::scoped_ptr<LLStartupListener> LLStartUp::sListener(new LLStartupListener());
-boost::scoped_ptr<LLViewerStats::PhaseMap> LLStartUp::sPhases(new LLViewerStats::PhaseMap);
+std::unique_ptr<LLEventPump> LLStartUp::sStateWatcher(new LLEventStream("StartupState"));
+std::unique_ptr<LLStartupListener> LLStartUp::sListener(new LLStartupListener());
+std::unique_ptr<LLViewerStats::PhaseMap> LLStartUp::sPhases(new LLViewerStats::PhaseMap);
 
 //
 // local function declaration
@@ -562,6 +562,12 @@ void update_texture_fetch()
 	LLAppViewer::getImageDecodeThread()->update(1); // unpauses the image thread
 	LLAppViewer::getTextureFetch()->update(1); // unpauses the texture fetch thread
 	gTextureList.updateImages(0.10f);
+
+    if (LLImageGLThread::sEnabled)
+    {
+        std::shared_ptr<LL::WorkQueue> main_queue = LL::WorkQueue::getInstance("mainloop");
+        main_queue->runFor(std::chrono::milliseconds(1));
+    }
 }
 
 void set_flags_and_update_appearance()
@@ -809,8 +815,6 @@ bool idle_startup()
 			}
 
 			#if LL_WINDOWS
-                LLPROFILE_STARTUP();
-
 				// On the windows dev builds, unpackaged, the message.xml file will 
 				// be located in indra/build-vc**/newview/<config>/app_settings.
 				std::string message_path = gDirUtilp->getExpandedFilename(LL_PATH_APP_SETTINGS,"message.xml");
@@ -998,11 +1002,6 @@ bool idle_startup()
             {
                 gAudiop = (LLAudioEngine *) new LLAudioEngine_FMODSTUDIO(gSavedSettings.getBOOL("FMODProfilerEnable"), gSavedSettings.getU32("FMODResampleMethod"));
             }
-#endif
-
-#ifdef LL_SDL2
-    if( !gAudiop )
-        gAudiop = new LLAudioEngineSDL2();
 #endif
 
 #ifdef LL_OPENAL
@@ -1677,7 +1676,7 @@ bool idle_startup()
 	{
 		// Generic failure message
 		std::ostringstream emsg;
-		emsg << LLTrans::getString("LoginFailed") << "\n";
+		emsg << LLTrans::getString("LoginFailedHeader") << "\n";
 		if(LLLoginInstance::getInstance()->authFailure())
 		{
 			LL_INFOS("LLStartup") << "Login failed, LLLoginInstance::getResponse(): "
@@ -1690,11 +1689,37 @@ bool idle_startup()
 			std::string message_id = response["message_id"];
 			std::string message; // actual string to show the user
 
-			if(!message_id.empty() && LLTrans::findString(message, message_id, response["message_args"]))
-			{
-				// message will be filled in with the template and arguments
-			}
-			else if(!message_response.empty())
+            bool localized_by_id = false;
+            if(!message_id.empty())
+            {
+                LLSD message_args = response["message_args"];
+                if (message_args.has("TIME")
+                    && (message_id == "LoginFailedAcountSuspended"
+                        || message_id == "LoginFailedAccountMaintenance"))
+                {
+                    LLDate date;
+                    std::string time_string;
+                    if (date.fromString(message_args["TIME"].asString()))
+                    {
+                        LLSD args;
+                        args["datetime"] = (S32)date.secondsSinceEpoch();
+                        LLTrans::findString(time_string, "LocalTime", args);
+                    }
+                    else
+                    {
+                        time_string = message_args["TIME"].asString() + " " + LLTrans::getString("PacificTime");
+                    }
+
+                    message_args["TIME"] = time_string;
+                }
+                // message will be filled in with the template and arguments
+                if (LLTrans::findString(message, message_id, message_args))
+                {
+                    localized_by_id = true;
+                }
+            }
+
+            if(!localized_by_id && !message_response.empty())
 			{
 				// *HACK: "no_inventory_host" sent as the message itself.
 				// Remove this clause when server is sending message_id as well.
@@ -2223,6 +2248,9 @@ bool idle_startup()
 		gAgentCamera.resetCamera();
 		display_startup();
 
+		// start up the ThreadPool we'll use for textures et al.
+        LLAppViewer::instance()->initGeneralThread();
+
 		// Initialize global class data needed for surfaces (i.e. textures)
 		LL_DEBUGS("AppInit") << "Initializing sky..." << LL_ENDL;
 		// Initialize all of the viewer object classes for the first time (doing things like texture fetches.
@@ -2237,7 +2265,11 @@ bool idle_startup()
 		display_startup();
 
 		LL_DEBUGS("AppInit") << "Decoding images..." << LL_ENDL;
-		// For all images pre-loaded into viewer cache, decode them.
+		// For all images pre-loaded into viewer cache, init
+        // priorities and fetching using decodeAllImages.
+        // Most of the fetching and decoding likely to be done
+        // by update_texture_fetch() later, while viewer waits.
+        //
 		// Need to do this AFTER we init the sky
 		const S32 DECODE_TIME_SEC = 2;
 		for (int i = 0; i < DECODE_TIME_SEC; i++)
@@ -3058,6 +3090,12 @@ bool idle_startup()
 		// <FS:Ansariel> Favorite Wearables
 		FSFloaterWearableFavorites::initCategory();
 
+		// <FS:Ansariel> Bypass the calling card sync-crap to create the agent's calling card
+		if (!gSavedSettings.getBOOL("FSCreateCallingCards"))
+		{
+			LLFriendCardsManager::createAgentCallingCard();
+		}
+
 		// Let the map know about the inventory.
 		LLFloaterWorldMap* floater_world_map = LLFloaterWorldMap::getInstance();
 		if(floater_world_map)
@@ -3534,7 +3572,6 @@ void register_viewer_callbacks(LLMessageSystem* msg)
 	msg->setHandlerFunc("EventInfoReply", LLEventNotifier::processEventInfoReply);
 	
 	msg->setHandlerFunc("PickInfoReply", &LLAvatarPropertiesProcessor::processPickInfoReply);
-//	msg->setHandlerFunc("ClassifiedInfoReply", LLPanelClassified::processClassifiedInfoReply);
 	msg->setHandlerFunc("ClassifiedInfoReply", LLAvatarPropertiesProcessor::processClassifiedInfoReply);
 	msg->setHandlerFunc("ParcelInfoReply", LLRemoteParcelInfoProcessor::processParcelInfoReply);
 	msg->setHandlerFunc("ScriptDialog", process_script_dialog);
@@ -3787,7 +3824,7 @@ void reset_login()
 	gAgentWearables.cleanup();
 	gAgentCamera.cleanup();
 	gAgent.cleanup();
-	LLWorld::getInstance()->destroyClass();
+	LLWorld::getInstance()->resetClass();
 
 	if ( gViewerWindow )
 	{	// Hide menus and normal buttons

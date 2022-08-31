@@ -288,6 +288,13 @@ void LLNetMap::setScale( F32 scale )
 
 void LLNetMap::draw()
 {
+    if (!LLWorld::instanceExists())
+    {
+        return;
+    }
+    LL_PROFILE_ZONE_SCOPED;
+ 	static LLFrameTimer map_timer;
+
 	// <FS:Ansariel>: Synchronize netmap scale throughout instances
 	if (mScale != sScale)
 	{
@@ -302,7 +309,6 @@ void LLNetMap::draw()
 	}
 // <FS:Ansariel> Aurora Sim
 
-	static LLFrameTimer map_timer;
 	static LLUIColor map_avatar_color = LLUIColorTable::instance().getColor("MapAvatarColor", LLColor4::white);
 	static LLUIColor map_track_color = LLUIColorTable::instance().getColor("MapTrackColor", LLColor4::white);
 	//static LLUIColor map_track_disabled_color = LLUIColorTable::instance().getColor("MapTrackDisabledColor", LLColor4::white);
@@ -500,7 +506,7 @@ void LLNetMap::draw()
 				// </FS:Ansariel>
 
 				// Draw water
-				gGL.setAlphaRejectSettings(LLRender::CF_GREATER, ABOVE_WATERLINE_ALPHA / 255.f);
+				gGL.flush();
 				{
 					if (regionp->getLand().getWaterTexture())
 					{
@@ -536,10 +542,10 @@ void LLNetMap::draw()
 						// </FS:Ansariel>
 					}
 				}
-				gGL.setAlphaRejectSettings(LLRender::CF_DEFAULT);
+				gGL.flush();
 // [SL:KB] - Patch: World-MinimapOverlay | Checked: 2012-07-26 (Catznip-3.3)
 			}
-// [/SL:KB]
+            gGL.flush();
 		}
 
 		// Redraw object layer periodically
@@ -1856,9 +1862,9 @@ void LLNetMap::setAvatarMarkColors(const uuid_vec_t& avatar_ids, const LLSD& col
 	// Use the name as color definition name from colors.xml
 	LLColor4 mark_color = LLUIColorTable::instance().getColor(color.asString(), LLColor4::green);
 
-	for (uuid_vec_t::const_iterator it = avatar_ids.begin(); it != avatar_ids.end(); ++it)
+	for (const auto& avatar_id : avatar_ids)
 	{
-		sAvatarMarksMap[*it] = mark_color;
+		sAvatarMarksMap[avatar_id] = mark_color;
 	}
 }
 
@@ -1873,13 +1879,9 @@ void LLNetMap::clearAvatarMarkColor(const LLUUID& avatar_id)
 // static
 void LLNetMap::clearAvatarMarkColors(const uuid_vec_t& avatar_ids)
 {
-	for (uuid_vec_t::const_iterator it = avatar_ids.begin(); it != avatar_ids.end(); ++it)
+	for (const auto& avatar_id : avatar_ids)
 	{
-		avatar_marks_map_t::iterator found = sAvatarMarksMap.find(*it);
-		if (found != sAvatarMarksMap.end())
-		{
-			sAvatarMarksMap.erase(found);
-		}
+		sAvatarMarksMap.erase(avatar_id);
 	}
 }
 
@@ -1901,10 +1903,7 @@ LLColor4 LLNetMap::getAvatarColor(const LLUUID& avatar_id)
 	color = cs_instance.colorize(avatar_id, color, LGG_CS_MINIMAP);
 
 	// Color based on contact sets prefs
-	if (cs_instance.hasFriendColorThatShouldShow(avatar_id, LGG_CS_MINIMAP))
-	{
-		color = cs_instance.getFriendColor(avatar_id);
-	}
+	cs_instance.hasFriendColorThatShouldShow(avatar_id, LGG_CS_MINIMAP, color);
 
 	// Mark Avatars with special colors
 	avatar_marks_map_t::iterator found = sAvatarMarksMap.find(avatar_id);

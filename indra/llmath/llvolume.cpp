@@ -49,6 +49,7 @@
 #include "llsdserialize.h"
 #include "llvector4a.h"
 #include "llmatrix4a.h"
+#include "llmeshoptimizer.h"
 #include "lltimer.h"
 
 #define DEBUG_SILHOUETTE_BINORMALS 0
@@ -96,7 +97,7 @@ const F32 SKEW_MAX	=  0.95f;
 const F32 SCULPT_MIN_AREA = 0.002f;
 const S32 SCULPT_MIN_AREA_DETAIL = 1;
 
-BOOL gDebugGL = FALSE;
+BOOL gDebugGL = FALSE; // See settings.xml "RenderDebugGL"
 
 // <FS:ND> Cache for Triangles/LOD estimation
 struct TrianglesPerLODCache
@@ -400,6 +401,7 @@ public:
 	virtual void visit(const LLOctreeNode<LLVolumeTriangle>* branch)
 	{ //this is a depth first traversal, so it's safe to assum all children have complete
 		//bounding data
+	LL_PROFILE_ZONE_SCOPED_CATEGORY_VOLUME
 
 		LLVolumeOctreeListener* node = (LLVolumeOctreeListener*) branch->getListener(0);
 
@@ -430,7 +432,7 @@ public:
 				max.setMax(max, *tri->mV[2]);
 			}
 		}
-		else if (!branch->isLeaf())
+		else if (branch->getChildCount() > 0)
 		{ //no data, but child nodes exist
 			LLVolumeOctreeListener* child = (LLVolumeOctreeListener*) branch->getChild(0)->getListener(0);
 
@@ -440,11 +442,7 @@ public:
 		}
 		else
 		{
-			// <FS:NaCl> [Megaprim crash fix]
-			//LL_ERRS() << "Empty leaf" << LL_ENDL;
-			LL_WARNS() << "Empty leaf" << LL_ENDL;
-			return;
-			// </FS:NaCl> [Megaprim crash fix]
+            llassert(!branch->isLeaf()); // Empty leaf
 		}
 
 		for (S32 i = 0; i < branch->getChildCount(); ++i)
@@ -843,6 +841,8 @@ S32 LLProfile::getNumPoints(const LLProfileParams& params, BOOL path_open,F32 de
 BOOL LLProfile::generate(const LLProfileParams& params, BOOL path_open,F32 detail, S32 split,
 						 BOOL is_sculpted, S32 sculpt_size)
 {
+	LL_PROFILE_ZONE_SCOPED_CATEGORY_VOLUME
+
 	if ((!mDirty) && (!is_sculpted))
 	{
 		return FALSE;
@@ -1323,6 +1323,8 @@ S32 LLPath::getNumNGonPoints(const LLPathParams& params, S32 sides, F32 startOff
 
 void LLPath::genNGon(const LLPathParams& params, S32 sides, F32 startOff, F32 end_scale, F32 twist_scale)
 {
+	LL_PROFILE_ZONE_SCOPED_CATEGORY_VOLUME
+
 	// Generates a circular path, starting at (1, 0, 0), counterclockwise along the xz plane.
 	static const F32 tableScale[] = { 1, 1, 1, 0.5f, 0.707107f, 0.53f, 0.525f, 0.5f };
 
@@ -1557,6 +1559,8 @@ S32 LLPath::getNumPoints(const LLPathParams& params, F32 detail)
 BOOL LLPath::generate(const LLPathParams& params, F32 detail, S32 split,
 					  BOOL is_sculpted, S32 sculpt_size)
 {
+	LL_PROFILE_ZONE_SCOPED_CATEGORY_VOLUME
+
 	if ((!mDirty) && (!is_sculpted))
 	{
 		return FALSE;
@@ -2136,6 +2140,8 @@ LLVolume::~LLVolume()
 
 BOOL LLVolume::generate()
 {
+	LL_PROFILE_ZONE_SCOPED_CATEGORY_VOLUME
+
 	LL_CHECK_MEMORY
 	llassert_always(mProfilep);
 	
@@ -2394,6 +2400,8 @@ bool LLVolumeFace::VertexData::compareNormal(const LLVolumeFace::VertexData& rhs
 
 bool LLVolume::unpackVolumeFaces(std::istream& is, S32 size)
 {
+	LL_PROFILE_ZONE_SCOPED_CATEGORY_VOLUME
+
 	//input stream is now pointing at a zlib compressed block of LLSD
 	//decompress block
 	LLSD mdl;
@@ -2820,6 +2828,8 @@ S32	LLVolume::getNumFaces() const
 
 void LLVolume::createVolumeFaces()
 {
+	LL_PROFILE_ZONE_SCOPED_CATEGORY_VOLUME
+
 	if (mGenerateSingleFace)
 	{
 		// do nothing
@@ -3814,6 +3824,8 @@ void LLVolume::generateSilhouetteVertices(std::vector<LLVector3> &vertices,
 										  const LLMatrix3& norm_mat_in,
 										  S32 face_mask)
 {
+	LL_PROFILE_ZONE_SCOPED_CATEGORY_VOLUME
+
 	LLMatrix4a mat;
 	mat.loadu(mat_in);
 
@@ -4940,6 +4952,8 @@ void LLVolumeFace::freeData()
 
 BOOL LLVolumeFace::create(LLVolume* volume, BOOL partial_build)
 {
+	LL_PROFILE_ZONE_SCOPED_CATEGORY_VOLUME
+
 	//tree for this face is no longer valid
 	delete mOctree;
 	mOctree = NULL;
@@ -5006,6 +5020,50 @@ bool LLVolumeFace::VertexMapData::ComparePosition::operator()(const LLVector3& a
 	}
 	
 	return a.mV[2] < b.mV[2];
+}
+
+void LLVolumeFace::remap()
+{
+    // Generate a remap buffer
+    std::vector<unsigned int> remap(mNumVertices);
+    S32 remap_vertices_count = LLMeshOptimizer::generateRemapMultiU16(&remap[0],
+        mIndices,
+        mNumIndices,
+        mPositions,
+        mNormals,
+        mTexCoords,
+        mNumVertices);
+
+    // Allocate new buffers
+    S32 size = ((mNumIndices * sizeof(U16)) + 0xF) & ~0xF;
+    U16* remap_indices = (U16*)ll_aligned_malloc_16(size);
+
+    S32 tc_bytes_size = ((remap_vertices_count * sizeof(LLVector2)) + 0xF) & ~0xF;
+    LLVector4a* remap_positions = (LLVector4a*)ll_aligned_malloc<64>(sizeof(LLVector4a) * 2 * remap_vertices_count + tc_bytes_size);
+    LLVector4a* remap_normals = remap_positions + remap_vertices_count;
+    LLVector2* remap_tex_coords = (LLVector2*)(remap_normals + remap_vertices_count);
+
+    // Fill the buffers
+    LLMeshOptimizer::remapIndexBufferU16(remap_indices, mIndices, mNumIndices, &remap[0]);
+    LLMeshOptimizer::remapPositionsBuffer(remap_positions, mPositions, mNumVertices, &remap[0]);
+    LLMeshOptimizer::remapNormalsBuffer(remap_normals, mNormals, mNumVertices, &remap[0]);
+    LLMeshOptimizer::remapUVBuffer(remap_tex_coords, mTexCoords, mNumVertices, &remap[0]);
+
+    // Free unused buffers
+    ll_aligned_free_16(mIndices);
+    ll_aligned_free<64>(mPositions);
+
+    // Tangets are now invalid
+    ll_aligned_free_16(mTangents);
+    mTangents = NULL;
+
+    // Assign new values
+    mIndices = remap_indices;
+    mPositions = remap_positions;
+    mNormals = remap_normals;
+    mTexCoords = remap_tex_coords;
+    mNumVertices = remap_vertices_count;
+    mNumAllocatedVertices = remap_vertices_count;
 }
 
 void LLVolumeFace::optimize(F32 angle_cutoff)
@@ -5619,6 +5677,8 @@ bool LLVolumeFace::cacheOptimize()
 
 void LLVolumeFace::createOctree(F32 scaler, const LLVector4a& center, const LLVector4a& size)
 {
+	LL_PROFILE_ZONE_SCOPED_CATEGORY_VOLUME
+
 	if (mOctree)
 	{
 		return;
@@ -6411,6 +6471,8 @@ void CalculateTangentArray(U32 vertexCount, const LLVector4a *vertex, const LLVe
 
 void LLVolumeFace::createTangents()
 {
+	LL_PROFILE_ZONE_SCOPED_CATEGORY_VOLUME
+
 	if (!mTangents)
 	{
 		allocateTangents(mNumVertices);
@@ -6451,9 +6513,9 @@ void LLVolumeFace::resizeVertices(S32 num_verts)
 	if (num_verts)
 	{
 		//pad texture coordinate block end to allow for QWORD reads
-		S32 size = ((num_verts*sizeof(LLVector2)) + 0xF) & ~0xF;
+		S32 tc_size = ((num_verts*sizeof(LLVector2)) + 0xF) & ~0xF;
 
-		mPositions = (LLVector4a*) ll_aligned_malloc<64>(sizeof(LLVector4a)*2*num_verts+size);
+		mPositions = (LLVector4a*) ll_aligned_malloc<64>(sizeof(LLVector4a)*2*num_verts+tc_size);
 		mNormals = mPositions+num_verts;
 		mTexCoords = (LLVector2*) (mNormals+num_verts);
 
@@ -6624,6 +6686,8 @@ void LLVolumeFace::fillFromLegacyData(std::vector<LLVolumeFace::VertexData>& v, 
 
 BOOL LLVolumeFace::createSide(LLVolume* volume, BOOL partial_build)
 {
+	LL_PROFILE_ZONE_SCOPED_CATEGORY_VOLUME
+
 	LL_CHECK_MEMORY
 	BOOL flat = mTypeMask & FLAT_MASK;
 
@@ -7132,6 +7196,8 @@ BOOL LLVolumeFace::createSide(LLVolume* volume, BOOL partial_build)
 void CalculateTangentArray(U32 vertexCount, const LLVector4a *vertex, const LLVector4a *normal,
         const LLVector2 *texcoord, U32 triangleCount, const U16* index_array, LLVector4a *tangent)
 {
+	LL_PROFILE_ZONE_SCOPED_CATEGORY_VOLUME
+
     //LLVector4a *tan1 = new LLVector4a[vertexCount * 2];
 	LLVector4a* tan1 = (LLVector4a*) ll_aligned_malloc_16(vertexCount*2*sizeof(LLVector4a));
 	// new(tan1) LLVector4a;

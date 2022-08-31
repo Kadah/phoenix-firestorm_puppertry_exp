@@ -11,7 +11,7 @@ include(00-Common)
 include(CURL)
 include(OpenSSL)
 include(NGHTTP2)
-include(ZLIB)
+include(ZLIBNG)
 include(LLCoreHttp)
 include(LLAddBuildTest)
 include(LLMessage)
@@ -24,8 +24,10 @@ include_directories (${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(
     ${LLMESSAGE_INCLUDE_DIRS}
     ${LLCOMMON_INCLUDE_DIRS}
-    ${LLCOREHTTP_INCLUDE_DIRS}
+#    ${LLCOREHTTP_INCLUDE_DIRS} <FS:ND> Make this system include directories.
     )
+
+include_directories( SYSTEM  ${LLCOREHTTP_INCLUDE_DIRS} )
 
 set(llcorehttp_SOURCE_FILES
     bufferarray.cpp

@@ -31,12 +31,13 @@
 #include "llconvexdecomposition.h"
 #include "llsdserialize.h"
 #include "llvector4a.h"
+#include "llmd5.h"
 #include "llcontrol.h"
 
 #ifdef LL_USESYSTEMLIBS
 # include <zlib.h>
 #else
-# include "zlib/zlib.h"
+# include "zlib-ng/zlib.h"
 #endif
 
 extern LLControlGroup gSavedSettings;
@@ -107,6 +108,14 @@ void LLModel::offsetMesh( const LLVector3& pivotPoint )
 			pos[i].add( pivot );
 		}
 	}
+}
+
+void LLModel::remapVolumeFaces()
+{
+    for (U32 i = 0; i < getNumVolumeFaces(); ++i)
+    {
+        mVolumeFaces[i].remap();
+    }
 }
 
 void LLModel::optimizeVolumeFaces()
@@ -633,10 +642,13 @@ void LLModel::generateNormals(F32 angle_cutoff)
 	}
 }
 
-
+extern std::string stripSuffix(std::string); // <FS:Beq/> mesh loader suffix configuration
 std::string LLModel::getName() const
 {
-    return mRequestedLabel.empty() ? mLabel : mRequestedLabel;
+	// <FS:Beq> remove the LOD suffix when used as the model name.
+    // return mRequestedLabel.empty() ? mLabel : mRequestedLabel;
+    return mRequestedLabel.empty() ? stripSuffix(mLabel) : mRequestedLabel;
+	// </FS:Beq>
 }
 
 //static
@@ -1431,7 +1443,7 @@ void LLMeshSkinInfo::fromLLSD(LLSD& skin)
 				}
 			}
 
-			mInvBindMatrix.push_back(mat);
+			mInvBindMatrix.push_back(LLMatrix4a(mat));
 		}
 
         if (mJointNames.size() != mInvBindMatrix.size())
@@ -1445,13 +1457,15 @@ void LLMeshSkinInfo::fromLLSD(LLSD& skin)
 
 	if (skin.has("bind_shape_matrix"))
 	{
+        LLMatrix4 mat;
 		for (U32 j = 0; j < 4; j++)
 		{
 			for (U32 k = 0; k < 4; k++)
 			{
-				mBindShapeMatrix.mMatrix[j][k] = skin["bind_shape_matrix"][j*4+k].asReal();
+				mat.mMatrix[j][k] = skin["bind_shape_matrix"][j*4+k].asReal();
 			}
 		}
+        mBindShapeMatrix.loadu(mat);
 	}
 
 	if (skin.has("alt_inverse_bind_matrix"))
@@ -1467,7 +1481,7 @@ void LLMeshSkinInfo::fromLLSD(LLSD& skin)
 				}
 			}
 			
-			mAlternateBindMatrix.push_back(mat);
+			mAlternateBindMatrix.push_back(LLMatrix4a(mat));
 		}
 	}
 
@@ -1484,6 +1498,8 @@ void LLMeshSkinInfo::fromLLSD(LLSD& skin)
 	{
 		mLockScaleIfJointPosition = false;
 	}
+
+    updateHash();
 }
 
 LLSD LLMeshSkinInfo::asLLSD(bool include_joints, bool lock_scale_if_joint_position) const
@@ -1536,6 +1552,40 @@ LLSD LLMeshSkinInfo::asLLSD(bool include_joints, bool lock_scale_if_joint_positi
 	}
 
 	return ret;
+}
+
+void LLMeshSkinInfo::updateHash()
+{
+    //  get hash of data relevant to render batches
+    LLMD5 hash;
+
+    //mJointNames
+    for (auto& name : mJointNames)
+    {
+        // <FS:Ansariel> Joint lookup speedup
+        //hash.update(name);
+        hash.update(name.mName);
+    }
+    
+    //mJointNums 
+    hash.update((U8*)&(mJointNums[0]), sizeof(S32) * mJointNums.size());
+    
+    //mInvBindMatrix
+    F32* src = mInvBindMatrix[0].getF32ptr();
+    
+    for (int i = 0; i < mInvBindMatrix.size() * 16; ++i)
+    {
+        S32 t = llround(src[i] * 10000.f);
+        hash.update((U8*)&t, sizeof(S32));
+    }
+    //hash.update((U8*)&(mInvBindMatrix[0]), sizeof(LLMatrix4a) * mInvBindMatrix.size());
+
+    hash.finalize();
+
+    U64 digest[2];
+    hash.raw_digest((U8*) digest);
+
+    mHash = digest[0];
 }
 
 LLModel::Decomposition::Decomposition(LLSD& data)

@@ -578,9 +578,15 @@ public:
 		mTimeBoxTextBox = getChild<LLTextBox>("time_box");
 
 		mInfoCtrl = LLUICtrlFactory::getInstance()->createFromFile<LLUICtrl>("inspector_info_ctrl.xml", this, LLPanel::child_registry_t::instance());
-		llassert(mInfoCtrl != NULL);
-		mInfoCtrl->setCommitCallback(boost::bind(&LLChatHistoryHeader::onClickInfoCtrl, mInfoCtrl));
-		mInfoCtrl->setVisible(FALSE);
+        if (mInfoCtrl)
+        {
+            mInfoCtrl->setCommitCallback(boost::bind(&LLChatHistoryHeader::onClickInfoCtrl, mInfoCtrl));
+            mInfoCtrl->setVisible(FALSE);
+        }
+        else
+        {
+            LL_ERRS() << "Failed to create an interface element due to missing or corrupted file inspector_info_ctrl.xml" << LL_ENDL;
+        }
 
 		return LLPanel::postBuild();
 	}
@@ -801,7 +807,7 @@ public:
 		if ( chat.mSourceType == CHAT_SOURCE_OBJECT)
 		{
 			std::string slurl = args["slurl"].asString();
-			if (slurl.empty())
+			if (slurl.empty() && LLWorld::instanceExists())
 			{
 				LLViewerRegion *region = LLWorld::getInstance()->getRegionFromPosAgent(chat.mPosAgent);
 				if(region)

@@ -106,6 +106,8 @@ protected:
     virtual std::string _getSearchText() const;
     virtual void onSetHighlight() const;
 
+    void imageLoaded();
+
 public:
 	// LLView interface
 	virtual void	onFocusLost();
@@ -142,6 +144,7 @@ public:
 	BOOL			remove( S32 index );	// remove item by index, return TRUE if found and removed
 	void			removeall() { clearRows(); }
 	bool			itemExists(const std::string& name);
+	LLScrollListItem* getItemByValue(const LLSD& value); // <FS:Ansariel> Get items by value
 
 	void			sortByName(BOOL ascending = TRUE); // Sort the entries in the combobox by name
 
@@ -248,6 +251,7 @@ private:
 	commit_callback_t	mTextChangedCallback;
 	commit_callback_t	mSelectionCallback;
 	boost::signals2::connection mTopLostSignalConnection;
+    boost::signals2::connection mImageLoadedConnection;
 	commit_signal_t		mOnReturnSignal;
 	S32                 mLastSelectedIndex;
 	bool				mForceDisableFulltextSearch; // <FS:Ansariel> Allow fulltext search in comboboxes

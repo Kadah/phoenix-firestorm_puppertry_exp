@@ -120,11 +120,14 @@
 	<menu_item_call label="Berühren" name="Attachment Touch" />
 	<menu_item_call label="Bearbeiten" name="Wearable Edit"/>
 	<menu_item_call label="In Gesamtansicht anzeigen" name="Show in Main Panel"/>
+	<menu_item_call label="In neuem Fenster anzeigen" name="Show in new Window"/>
 	<menu_item_call label="Hinzufügen" name="Wearable Add"/>
 	<menu_item_call label="Texturen aktualisieren" name="Texture Refresh Attachment"/>
 	<menu_item_call label="Ausziehen" name="Take Off"/>
 	<menu_item_call label="Nur auf mich anwenden" name="Settings Apply Local"/>
 	<menu_item_call label="Auf Parzelle anwenden" name="Settings Apply Parcel"/>
+	<menu_item_call label="Neuen Ordner aus Auswahl erstellen" name="New folder from selected"/>
+	<menu_item_call label="Gruppierung durch den Ordner aufheben" name="Ungroup folder items"/>
 	<menu_item_call label="In Marktplatz-Auflistungen kopieren" name="Marketplace Copy"/>
 	<menu_item_call label="In Marktplatz-Auflistungen verschieben" name="Marketplace Move"/>
 	<menu_item_call label="--keine Optionen--" name="--no options--"/>

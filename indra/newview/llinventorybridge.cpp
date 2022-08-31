@@ -855,6 +855,19 @@ void LLInvFVBridge::getClipboardEntries(bool show_asset_id,
 		//	disabled_items.push_back(std::string("Copy"));
 		//}
 
+        if (isAgentInventory())
+        {
+            items.push_back(std::string("New folder from selected"));
+            items.push_back(std::string("Subfolder Separator"));
+            std::set<LLUUID> selected_uuid_set = LLAvatarActions::getInventorySelectedUUIDs();
+            uuid_vec_t ids;
+            std::copy(selected_uuid_set.begin(), selected_uuid_set.end(), std::back_inserter(ids));
+            if (!is_only_items_selected(ids) && !is_only_cats_selected(ids))
+            {
+                disabled_items.push_back(std::string("New folder from selected"));
+            }
+        }
+
 		if (obj->getIsLinkType())
 		{
 			items.push_back(std::string("Find Original"));
@@ -3719,6 +3732,12 @@ void LLFolderBridge::performAction(LLInventoryModel* model, std::string action)
 		gSavedPerAccountSettings.setLLSD("FSProtectedFolders", new_protected_folders);
 	}
 	// </FS:Ansariel>
+	// <FS:Ansariel> Show folder in new window option
+	else if ("show_in_new_window" == action)
+	{
+		LLFloaterReg::showInstance("fs_partial_inventory", LLSD().with("start_folder_id", mUUID).with("start_folder_name", mDisplayName));
+	}
+	// </FS:Ansariel>
 }
 
 void LLFolderBridge::gatherMessage(std::string& message, S32 depth, LLError::ELevel log_level)
@@ -4661,6 +4680,9 @@ void LLFolderBridge::buildContextMenuOptions(U32 flags, menuentry_vec_t&   items
 	}
 	// </FS:Ansariel>
 
+	// <FS:Ansariel> Show folder in new window option
+	items.push_back((std::string("Show in new Window")));
+
 	// Add menu items that are dependent on the contents of the folder.
 	LLViewerInventoryCategory* category = (LLViewerInventoryCategory *) model->getCategory(mUUID);
 	if (category && (marketplace_listings_id != mUUID))
@@ -4723,7 +4745,16 @@ void LLFolderBridge::buildContextMenuFolderOptions(U32 flags,   menuentry_vec_t&
 			items.push_back(std::string("Conference Chat Folder"));
 			items.push_back(std::string("IM All Contacts In Folder"));
 		}
+
+        if (((flags & ITEM_IN_MULTI_SELECTION) == 0) && hasChildren())
+        {
+            items.push_back(std::string("Ungroup folder items"));
+        }
 	}
+    else
+    {
+        disabled_items.push_back(std::string("New folder from selected"));
+    }
 
 #ifndef LL_RELEASE_FOR_DOWNLOAD
 	if (LLFolderType::lookupIsProtectedType(type) && is_agent_inventory)
@@ -6355,14 +6386,14 @@ class LLCallingCardObserver : public LLFriendObserver
 public:
 	LLCallingCardObserver(LLCallingCardBridge* bridge) : mBridgep(bridge) {}
 	virtual ~LLCallingCardObserver() { mBridgep = NULL; }
-	virtual void changed(U32 mask)
-	{
-		mBridgep->refreshFolderViewItem();
-		if (mask & LLFriendObserver::ONLINE)
-		{
-			mBridgep->checkSearchBySuffixChanges();
-		}
-	}
+    virtual void changed(U32 mask)
+    {
+        if (mask & LLFriendObserver::ONLINE)
+        {
+            mBridgep->refreshFolderViewItem();
+            mBridgep->checkSearchBySuffixChanges();
+        }
+    }
 protected:
 	LLCallingCardBridge* mBridgep;
 };
@@ -6376,14 +6407,16 @@ LLCallingCardBridge::LLCallingCardBridge(LLInventoryPanel* inventory,
 										 const LLUUID& uuid ) :
 	LLItemBridge(inventory, root, uuid)
 {
-	mObserver = new LLCallingCardObserver(this);
-	LLAvatarTracker::instance().addObserver(mObserver);
+    mObserver = new LLCallingCardObserver(this);
+    mCreatorUUID = getItem()->getCreatorUUID();
+    LLAvatarTracker::instance().addParticularFriendObserver(mCreatorUUID, mObserver);
 }
 
 LLCallingCardBridge::~LLCallingCardBridge()
 {
-	LLAvatarTracker::instance().removeObserver(mObserver);
-	delete mObserver;
+    LLAvatarTracker::instance().removeParticularFriendObserver(mCreatorUUID, mObserver);
+
+    delete mObserver;
 }
 
 void LLCallingCardBridge::refreshFolderViewItem()

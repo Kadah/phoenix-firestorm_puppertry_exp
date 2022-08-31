@@ -106,7 +106,7 @@ public:
 	void 			loadModel(S32 lod, const std::string& file_name, bool force_disable_slm = false);
 
 	void			loadHighLodModel();
-	
+
 	void onViewOptionChecked(LLUICtrl* ctrl);
 	void onUploadOptionChecked(LLUICtrl* ctrl);
 	bool isViewOptionChecked(const LLSD& userdata);
@@ -167,6 +167,8 @@ protected:
 	static void onPhysicsOptimize(LLUICtrl* ctrl, void* userdata);
 	static void onPhysicsDecomposeBack(LLUICtrl* ctrl, void* userdata);
 	static void onPhysicsSimplifyBack(LLUICtrl* ctrl, void* userdata);
+	static void onSuffixStandardSelected(LLUICtrl* ctrl, void* userdata); // <FS:Beq> mesh loader suffix configuration
+	static void onSelectUDPhysics(LLUICtrl* ctrl, void* userdata); // <FS:Beq/> custom setter for upload preview settings tab
 		
 	void			draw();
 	
@@ -197,9 +199,7 @@ protected:
 	std::map<std::string, bool> mViewOptionDisabled;
 	
 	//store which lod mode each LOD is using
-	// 0 - load from file
-	// 1 - auto generate
-	// 2 - use LoD above
+	// See eLoDMode
 	S32 mLODMode[4];
 
 	LLMutex* mStatusLock;

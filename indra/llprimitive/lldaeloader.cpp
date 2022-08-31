@@ -116,14 +116,17 @@ std::string colladaVersion[VERSIONTYPE_COUNT+1] =
 	"Unsupported"
 };
 
-static const std::string lod_suffix[LLModel::NUM_LODS] =
-{
-	"_LOD0",
-	"_LOD1",
-	"_LOD2",
-	"",
-	"_PHYS",
-};
+// <FS:Beq> moved to allow configuration
+// static const std::string lod_suffix[LLModel::NUM_LODS] =
+// {
+// 	"_LOD0",
+// 	"_LOD1",
+// 	"_LOD2",
+// 	"",
+// 	"_PHYS",
+// };
+// </FS:Beq>
+
 
 const U32 LIMIT_MATERIALS_OUTPUT = 12;
 
@@ -193,7 +196,11 @@ bool get_dom_sources(const domInputLocalOffset_Array& inputs, S32& pos_offset, S
 	return true;
 }
 
-LLModel::EModelStatus load_face_from_dom_triangles(std::vector<LLVolumeFace>& face_list, std::vector<std::string>& materials, domTrianglesRef& tri)
+LLModel::EModelStatus load_face_from_dom_triangles(
+    std::vector<LLVolumeFace>& face_list,
+    std::vector<std::string>& materials,
+    domTrianglesRef& tri,
+    LLSD& log_msg)
 {
 	LLVolumeFace face;
 	std::vector<LLVolumeFace::VertexData> verts;
@@ -213,12 +220,18 @@ LLModel::EModelStatus load_face_from_dom_triangles(std::vector<LLVolumeFace>& fa
 
 	if ( !get_dom_sources(inputs, pos_offset, tc_offset, norm_offset, idx_stride, pos_source, tc_source, norm_source))
 	{
+        LLSD args;
+        args["Message"] = "ParsingErrorBadElement";
+        log_msg.append(args);
 		return LLModel::BAD_ELEMENT;
 	}
 
 	if (!pos_source || !pos_source->getFloat_array())
 	{
 		LL_WARNS() << "Unable to process mesh without position data; invalid model;  invalid model." << LL_ENDL;
+        LLSD args;
+        args["Message"] = "ParsingErrorPositionInvalidModel";
+        log_msg.append(args);
 		return LLModel::BAD_ELEMENT;
 	}
 
@@ -398,7 +411,11 @@ LLModel::EModelStatus load_face_from_dom_triangles(std::vector<LLVolumeFace>& fa
 	return LLModel::NO_ERRORS ;
 }
 
-LLModel::EModelStatus load_face_from_dom_polylist(std::vector<LLVolumeFace>& face_list, std::vector<std::string>& materials, domPolylistRef& poly, LLSD& log_msg)
+LLModel::EModelStatus load_face_from_dom_polylist(
+    std::vector<LLVolumeFace>& face_list,
+    std::vector<std::string>& materials,
+    domPolylistRef& poly,
+    LLSD& log_msg)
 {
 	domPRef p = poly->getP();
 	domListOfUInts& idx = p->getValue();
@@ -425,6 +442,10 @@ LLModel::EModelStatus load_face_from_dom_polylist(std::vector<LLVolumeFace>& fac
 
 	if (!get_dom_sources(inputs, pos_offset, tc_offset, norm_offset, idx_stride, pos_source, tc_source, norm_source))
 	{
+        LL_WARNS() << "Bad element." << LL_ENDL;
+        LLSD args;
+        args["Message"] = "ParsingErrorBadElement";
+        log_msg.append(args);
 		return LLModel::BAD_ELEMENT;
 	}
 
@@ -476,6 +497,9 @@ LLModel::EModelStatus load_face_from_dom_polylist(std::vector<LLVolumeFace>& fac
 				if (!cv.getPosition().isFinite3())
 				{
 					LL_WARNS() << "Found NaN while loading position data from DAE-Model, invalid model." << LL_ENDL;
+                    LLSD args;
+                    args["Message"] = "PositionNaN";
+                    log_msg.append(args);
 					return LLModel::BAD_ELEMENT;
 				}
 			}
@@ -508,6 +532,10 @@ LLModel::EModelStatus load_face_from_dom_polylist(std::vector<LLVolumeFace>& fac
 				if (!cv.getNormal().isFinite3())
 				{
 					LL_WARNS() << "Found NaN while loading normals from DAE-Model, invalid model." << LL_ENDL;
+                    LLSD args;
+                    args["Message"] = "NormalsNaN";
+                    log_msg.append(args);
+
 					return LLModel::BAD_ELEMENT;
 				}
 			}
@@ -825,6 +853,9 @@ LLModel::EModelStatus load_face_from_dom_polygons(std::vector<LLVolumeFace>& fac
 		}
 	}
 
+    // Viewer can only fit U16 vertices, shouldn't we do some checks here and return overflow if result has more?
+    llassert(vert_idx.size() < U16_MAX);
+
 	//build vertex array from map
 	std::vector<LLVolumeFace::VertexData> new_verts;
 	new_verts.resize(vert_idx.size());
@@ -842,7 +873,12 @@ LLModel::EModelStatus load_face_from_dom_polygons(std::vector<LLVolumeFace>& fac
 	for (U32 i = 0; i < verts.size(); ++i)
 	{
 		indices[i] = vert_idx[verts[i]];
-		llassert(!i || (indices[i-1] != indices[i]));
+        if (i % 3 != 0) // assumes GL_TRIANGLES, compare 0-1, 1-2, 3-4, 4-5 but not 2-3 or 5-6
+        {
+            // A faulty degenerate triangle detection (triangle with 0 area),
+            // probably should be a warning and not an assert
+            llassert(!i || (indices[i-1] != indices[i]));
+        }
 	}
 
 	// DEBUG just build an expanded triangle list
@@ -898,7 +934,11 @@ LLDAELoader::LLDAELoader(
     std::map<std::string, std::string>&		jointAliasMap,
     U32					maxJointsPerMesh,
 	U32					modelLimit,
-    bool				preprocess)
+	// <FS:Beq> mesh loader suffix configuration
+    // bool				preprocess)
+    bool				preprocess,
+	const LODSuffixArray& lod_suffix)
+	// </FS:Beq>
 : LLModelLoader(
 		filename,
 		lod,
@@ -914,11 +954,20 @@ LLDAELoader::LLDAELoader(
   mGeneratedModelLimit(modelLimit),
   mPreprocessDAE(preprocess)
 {
+	// <FS:Beq> mesh loader suffix configuration
+	for(int i=0;i<LLModel::NUM_LODS;i++)
+	{
+  		LLDAELoader::sLODSuffix[i] = lod_suffix[i];
+	}
+	// </FS:Beq>
 }
 
 LLDAELoader::~LLDAELoader()
 {
 }
+
+//static
+LODSuffixArray LLDAELoader::sLODSuffix{};// <FS:Beq/> configurable lod suffixes
 
 struct ModelSort
 {
@@ -965,6 +1014,9 @@ bool LLDAELoader::OpenFile(const std::string& filename)
 	if (!dom)
 	{
 		LL_INFOS() <<" Error with dae - traditionally indicates a corrupt file."<<LL_ENDL;
+        LLSD args;
+        args["Message"] = "ParsingErrorCorrupt";
+        mWarningsArray.append(args);
 		setLoadState( ERROR_PARSING );
 		return false;
 	}
@@ -992,6 +1044,9 @@ bool LLDAELoader::OpenFile(const std::string& filename)
 	if (!doc)
 	{
 		LL_WARNS() << "can't find internal doc" << LL_ENDL;
+        LLSD args;
+        args["Message"] = "ParsingErrorNoDoc";
+        mWarningsArray.append(args);
 		return false;
 	}
 	
@@ -999,6 +1054,9 @@ bool LLDAELoader::OpenFile(const std::string& filename)
 	if (!root)
 	{
 		LL_WARNS() << "document has no root" << LL_ENDL;
+        LLSD args;
+        args["Message"] = "ParsingErrorNoRoot";
+        mWarningsArray.append(args);
 		return false;
 	}
 	
@@ -1014,6 +1072,9 @@ bool LLDAELoader::OpenFile(const std::string& filename)
 		if (!result)
 		{
 			LL_INFOS() << "Could not verify controller" << LL_ENDL;
+            LLSD args;
+            args["Message"] = "ParsingErrorBadElement";
+            mWarningsArray.append(args);
 			setLoadState( ERROR_PARSING );
 			return true;
 		}
@@ -1147,6 +1208,9 @@ bool LLDAELoader::OpenFile(const std::string& filename)
 	if (!scene)
 	{
 		LL_WARNS() << "document has no visual_scene" << LL_ENDL;
+        LLSD args;
+        args["Message"] = "ParsingErrorNoScene";
+        mWarningsArray.append(args);
 		setLoadState( ERROR_PARSING );
 		return true;
 	}
@@ -1155,11 +1219,14 @@ bool LLDAELoader::OpenFile(const std::string& filename)
 
 	bool badElement = false;
 	
-	processElement( scene, badElement, &dae );
+	processElement( scene, badElement, &dae);
 	
 	if ( badElement )
 	{
 		LL_INFOS()<<"Scene could not be parsed"<<LL_ENDL;
+        LLSD args;
+        args["Message"] = "ParsingErrorCantParseScene";
+        mWarningsArray.append(args);
 		setLoadState( ERROR_PARSING );
 	}
 	
@@ -1231,17 +1298,19 @@ void LLDAELoader::processDomModel(LLModel* model, DAE* dae, daeElement* root, do
 
 			LLMeshSkinInfo& skin_info = model->mSkinInfo;
 
+            LLMatrix4 mat;
 			for (int i = 0; i < 4; i++)
 			{
 				for(int j = 0; j < 4; j++)
 				{
-					skin_info.mBindShapeMatrix.mMatrix[i][j] = dom_value[i + j*4];
+                    mat.mMatrix[i][j] = dom_value[i + j*4];
 				}
 			}
 
-			LLMatrix4 trans = normalized_transformation;
-			trans *= skin_info.mBindShapeMatrix;
-			skin_info.mBindShapeMatrix = trans;							
+            skin_info.mBindShapeMatrix.loadu(mat);
+
+			LLMatrix4a trans(normalized_transformation);
+            matMul(trans, skin_info.mBindShapeMatrix, skin_info.mBindShapeMatrix);
 		}
 
 
@@ -1465,7 +1534,7 @@ void LLDAELoader::processDomModel(LLModel* model, DAE* dae, daeElement* root, do
 									mat.mMatrix[i][j] = transform[k*16 + i + j*4];
 								}
 							}
-							model->mSkinInfo.mInvBindMatrix.push_back(mat);
+							model->mSkinInfo.mInvBindMatrix.push_back(LLMatrix4a(mat));
 						}
 					}
 				}
@@ -1549,9 +1618,9 @@ void LLDAELoader::processDomModel(LLModel* model, DAE* dae, daeElement* root, do
 			if (mJointMap.find(lookingForJoint) != mJointMap.end()
 				&& model->mSkinInfo.mInvBindMatrix.size() > i)
 			{
-				LLMatrix4 newInverse = model->mSkinInfo.mInvBindMatrix[i];
+				LLMatrix4 newInverse = LLMatrix4(model->mSkinInfo.mInvBindMatrix[i].getF32ptr());
 				newInverse.setTranslation( mJointList[lookingForJoint].getTranslation() );
-				model->mSkinInfo.mAlternateBindMatrix.push_back( newInverse );
+				model->mSkinInfo.mAlternateBindMatrix.push_back( LLMatrix4a(newInverse) );
             }
 			else
 			{
@@ -2014,7 +2083,7 @@ daeElement* LLDAELoader::getChildFromElement( daeElement* pElement, std::string 
     return NULL;
 }
 
-void LLDAELoader::processElement( daeElement* element, bool& badElement, DAE* dae )
+void LLDAELoader::processElement( daeElement* element, bool& badElement, DAE* dae)
 {
 	LLMatrix4 saved_transform;
 	bool pushed_mat = false;
@@ -2108,6 +2177,11 @@ void LLDAELoader::processElement( daeElement* element, bool& badElement, DAE* da
 					if (mTransform.determinant() < 0)
 					{ //negative scales are not supported
 						LL_INFOS() << "Negative scale detected, unsupported transform.  domInstance_geometry: " << getElementLabel(instance_geo) << LL_ENDL;
+                        LLSD args;
+                        args["Message"] = "NegativeScaleTrans";
+                        args["LABEL"] = getElementLabel(instance_geo);
+                        mWarningsArray.append(args);
+
 						badElement = true;
 					}
 
@@ -2131,6 +2205,10 @@ void LLDAELoader::processElement( daeElement* element, bool& badElement, DAE* da
 					if (transformation.determinant() < 0)
 					{ //negative scales are not supported
 						LL_INFOS() << "Negative scale detected, unsupported post-normalization transform.  domInstance_geometry: " << getElementLabel(instance_geo) << LL_ENDL;
+                        LLSD args;
+                        args["Message"] = "NegativeScaleNormTrans";
+                        args["LABEL"] = getElementLabel(instance_geo);
+                        mWarningsArray.append(args);
 						badElement = true;
 					}
 
@@ -2146,8 +2224,17 @@ void LLDAELoader::processElement( daeElement* element, bool& badElement, DAE* da
 						{
 							label += (char)((int)'a' + model->mSubmodelID);
 						}
-
-						model->mLabel = label + lod_suffix[mLod];
+						// <FS:Beq> Support altenate LOD naming conventions
+						// model->mLabel = label + sLODSuffix[mLod];
+						if ( sLODSuffix[mLod].size() > 0 )
+						{
+							model->mLabel = label + '_' + sLODSuffix[mLod];
+						}
+						else
+						{
+							model->mLabel = label;
+						}
+						// </FS:Beq>
 					}
 					else
 					{
@@ -2172,6 +2259,9 @@ void LLDAELoader::processElement( daeElement* element, bool& badElement, DAE* da
 		else 
 		{
 			LL_INFOS()<<"Unable to resolve geometry URL."<<LL_ENDL;
+            LLSD args;
+            args["Message"] = "CantResolveGeometryUrl";
+            mWarningsArray.append(args);
 			badElement = true;			
 		}
 
@@ -2420,13 +2510,19 @@ std::string LLDAELoader::getElementLabel(daeElement *element)
 // static
 size_t LLDAELoader::getSuffixPosition(std::string label)
 {
-	// <FS:Ansariel> Bug fixes in mesh importer by Drake Arconis
+    // <FS:Beq> Selectable suffixes
 	//if ((label.find("_LOD") != -1) || (label.find("_PHYS") != -1))
-	if ((label.find("_LOD") != std::string::npos) || (label.find("_PHYS") != std::string::npos))
-	// </FS:Ansariel>
+	//{
+	// 	return label.rfind('_');
+	//}
+    for(int i=0; i < LLModel::NUM_LODS; i++)
 	{
-		return label.rfind('_');
+    	if (sLODSuffix[i].size() && label.find(sLODSuffix[i]) != std::string::npos)
+    	{
+	        return label.rfind('_');
+	    }
 	}
+	// </FS:Beq>
 	return -1;
 }
 
@@ -2465,7 +2561,7 @@ bool LLDAELoader::addVolumeFacesFromDomMesh(LLModel* pModel,domMesh* mesh, LLSD&
 	{
 		domTrianglesRef& tri = tris.get(i);
 
-		status = load_face_from_dom_triangles(pModel->getVolumeFaces(), pModel->getMaterialList(), tri);
+		status = load_face_from_dom_triangles(pModel->getVolumeFaces(), pModel->getMaterialList(), tri, log_msg);
 		pModel->mStatus = status;
 		if(status != LLModel::NO_ERRORS)
 		{
@@ -2492,6 +2588,7 @@ bool LLDAELoader::addVolumeFacesFromDomMesh(LLModel* pModel,domMesh* mesh, LLSD&
 	for (U32 i = 0; i < polygons.getCount(); ++i)
 	{
 		domPolygonsRef& poly = polygons.get(i);
+
 		status = load_face_from_dom_polygons(pModel->getVolumeFaces(), pModel->getMaterialList(), poly);
 
 		if(status != LLModel::NO_ERRORS)
@@ -2570,8 +2667,17 @@ bool LLDAELoader::loadModelsFromDomMesh(domMesh* mesh, std::vector<LLModel*>& mo
 	LLModel* ret = new LLModel(volume_params, 0.f);
 
 	std::string model_name = getLodlessLabel(mesh);
-	ret->mLabel = model_name + lod_suffix[mLod];
-
+	// <FS:Beq> Support altenate LOD naming conventions
+	// ret->mLabel = model_name + sLODSuffix[mLod];
+	if ( sLODSuffix[mLod].size() > 0 )
+	{
+		ret->mLabel = model_name + '_' + sLODSuffix[mLod];
+	}
+	else
+	{
+		ret->mLabel = model_name;
+	}
+	// </FS:Beq>
 	llassert(!ret->mLabel.empty());
 
 	// Like a monkey, ready to be shot into space
@@ -2615,7 +2721,7 @@ bool LLDAELoader::loadModelsFromDomMesh(domMesh* mesh, std::vector<LLModel*>& mo
 
 		if (!mNoOptimize)
 		{
-			ret->optimizeVolumeFaces();
+			ret->remapVolumeFaces();
 		}
 
 		volume_faces = remainder.size();
@@ -2629,7 +2735,10 @@ bool LLDAELoader::loadModelsFromDomMesh(domMesh* mesh, std::vector<LLModel*>& mo
 		{
 			LLModel* next = new LLModel(volume_params, 0.f);
 			next->mSubmodelID = ++submodelID;
-			next->mLabel = model_name + (char)((int)'a' + next->mSubmodelID) + lod_suffix[mLod];
+			// <FS:Beq> configurable lod suffixes
+			// next->mLabel = model_name + (char)((int)'a' + next->mSubmodelID) + lod_suffix[mLod];
+			next->mLabel = model_name + (char)((int)'a' + next->mSubmodelID) + sLODSuffix[mLod];
+			// </FS:Beq>
 			next->getVolumeFaces() = remainder;
 			next->mNormalizedScale = ret->mNormalizedScale;
 			next->mNormalizedTranslation = ret->mNormalizedTranslation;

@@ -478,7 +478,19 @@ void set_merchant_SLM_menu()
     // All other cases (new merchant, not merchant, migrated merchant): show the new Marketplace Listings menu and enable the tool
     gMenuHolder->getChild<LLView>("MarketplaceListings")->setVisible(TRUE);
     LLCommand* command = LLCommandManager::instance().getCommand("marketplacelistings");
-	gToolBarView->enableCommand(command->id(), true);
+    gToolBarView->enableCommand(command->id(), true);
+
+    const LLUUID marketplacelistings_id = gInventory.findCategoryUUIDForType(LLFolderType::FT_MARKETPLACE_LISTINGS, false);
+    if (marketplacelistings_id.isNull())
+    {
+        U32 mkt_status = LLMarketplaceData::instance().getSLMStatus();
+        bool is_merchant = (mkt_status == MarketplaceStatusCodes::MARKET_PLACE_MERCHANT) || (mkt_status == MarketplaceStatusCodes::MARKET_PLACE_MIGRATED_MERCHANT);
+        if (is_merchant)
+        {
+            gInventory.findCategoryUUIDForType(LLFolderType::FT_MARKETPLACE_LISTINGS, true);
+            LL_WARNS("SLM") << "Creating the marketplace listings folder for a merchant" << LL_ENDL;
+        }
+    }
 }
 
 void check_merchant_status(bool force)
@@ -3362,6 +3374,39 @@ void handle_object_touch()
 	send_ObjectDeGrab_message(object, pick);
 }
 
+void handle_object_show_original()
+{
+    LLViewerObject* object = LLSelectMgr::getInstance()->getSelection()->getPrimaryObject();
+    if (!object)
+    {
+        return;
+    }
+
+    LLViewerObject *parent = (LLViewerObject*)object->getParent();
+    while (parent)
+    {
+        if(parent->isAvatar())
+        {
+            break;
+        }
+        object = parent;
+        parent = (LLViewerObject*)parent->getParent();
+    }
+
+    if (!object || object->isAvatar())
+    {
+        return;
+    }
+
+    show_item_original(object->getAttachmentItemID());
+}
+
+// <FS:Ansariel> Disable if prevented by RLVa
+bool enable_object_show_original()
+{
+	return !RlvActions::hasBehaviour(RLV_BHVR_SHOWINV);
+}
+// </FS:Ansariel>
 
 static void init_default_item_label(const std::string& item_name)
 {
@@ -4390,6 +4435,11 @@ bool my_profile_visible()
 	return floaterp && floaterp->isInVisibleChain();
 }
 
+bool picks_tab_visible()
+{
+    return my_profile_visible() && LLAvatarActions::isPickTabSelected(gAgentID);
+}
+
 bool enable_freeze_eject(const LLSD& avatar_id)
 {
 // [SL:KB] - Patch: UI-AvatarNearbyActions | Checked: 2011-05-13 (Catznip-2.6.0a) | Added: Catznip-2.6.0a
@@ -5293,29 +5343,15 @@ bool is_object_sittable()
 	}
 }
 
-
 // only works on pie menu
-void handle_object_sit_or_stand()
+void handle_object_sit(LLViewerObject *object, const LLVector3 &offset)
 {
-	LLPickInfo pick = LLToolPie::getInstance()->getPick();
-	LLViewerObject *object = pick.getObject();;
-	if (!object || pick.mPickType == LLPickInfo::PICK_FLORA)
-	{
-		return;
-	}
-
-	if (sitting_on_selection())
-	{
-		gAgent.standUp();
-		return;
-	}
-
 	// get object selection offset 
 
 //	if (object && object->getPCode() == LL_PCODE_VOLUME)
 // [RLVa:KB] - Checked: 2010-03-06 (RLVa-1.2.0c) | Modified: RLVa-1.2.0c
 	if ( (object && object->getPCode() == LL_PCODE_VOLUME) && 
-		 ((!rlv_handler_t::isEnabled()) || (RlvActions::canSit(object, pick.mObjectOffset))) )
+		 ((!rlv_handler_t::isEnabled()) || (RlvActions::canSit(object, offset))) )
 // [/RLVa:KB]
 	{
 // [RLVa:KB] - Checked: 2010-08-29 (RLVa-1.2.1c) | Added: RLVa-1.2.1c
@@ -5336,10 +5372,40 @@ void handle_object_sit_or_stand()
 		gMessageSystem->addUUIDFast(_PREHASH_SessionID, gAgent.getSessionID());
 		gMessageSystem->nextBlockFast(_PREHASH_TargetObject);
 		gMessageSystem->addUUIDFast(_PREHASH_TargetID, object->mID);
-		gMessageSystem->addVector3Fast(_PREHASH_Offset, pick.mObjectOffset);
+		gMessageSystem->addVector3Fast(_PREHASH_Offset, offset);
 
 		object->getRegion()->sendReliableMessage();
 	}
+}
+
+void handle_object_sit_or_stand()
+{
+    LLPickInfo pick = LLToolPie::getInstance()->getPick();
+    LLViewerObject *object = pick.getObject();
+    if (!object || pick.mPickType == LLPickInfo::PICK_FLORA)
+    {
+        return;
+    }
+
+    if (sitting_on_selection())
+    {
+        gAgent.standUp();
+        return;
+    }
+
+    handle_object_sit(object, pick.mObjectOffset);
+}
+
+void handle_object_sit(const LLUUID& object_id)
+{
+    LLViewerObject* obj = gObjectList.findObject(object_id);
+    if (!obj)
+    {
+        return;
+    }
+
+    LLVector3 offset(0, 0, 0);
+    handle_object_sit(obj, offset);
 }
 
 void near_sit_down_point(BOOL success, void *)
@@ -7772,6 +7838,29 @@ class LLAvatarToggleMyProfile : public view_listener_t
 	}
 };
 
+class LLAvatarTogglePicks : public view_listener_t
+{
+    bool handleEvent(const LLSD& userdata)
+    {
+        LLFloater * instance = LLAvatarActions::getProfileFloater(gAgent.getID());
+        if (LLFloater::isMinimized(instance) || (instance && !instance->hasFocus() && !instance->getIsChrome()))
+        {
+            instance->setMinimized(FALSE);
+            instance->setFocus(TRUE);
+            LLAvatarActions::showPicks(gAgent.getID());
+        }
+        else if (picks_tab_visible())
+        {
+            instance->closeFloater();
+        }
+        else
+        {
+            LLAvatarActions::showPicks(gAgent.getID());
+        }
+        return true;
+    }
+};
+
 class LLAvatarToggleSearch : public view_listener_t
 {
 	bool handleEvent(const LLSD& userdata)
@@ -7845,6 +7934,24 @@ class LLAvatarResetSkeletonAndAnimations : public view_listener_t
 		return true;
 	}
 };
+
+class LLAvatarResetSelfSkeletonAndAnimations : public view_listener_t
+{
+	bool handleEvent(const LLSD& userdata)
+	{
+		LLVOAvatar* avatar = find_avatar_from_object(LLSelectMgr::getInstance()->getSelection()->getPrimaryObject());
+		if (avatar)
+		{
+			avatar->resetSkeleton(true);
+		}
+		else
+		{
+			gAgentAvatarp->resetSkeleton(true);
+		}
+		return true;
+	}
+};
+
 
 class LLAvatarAddContact : public view_listener_t
 {
@@ -8339,6 +8446,15 @@ class LLShowAgentProfile : public view_listener_t
 		}
 		return true;
 	}
+};
+
+class LLShowAgentProfilePicks : public view_listener_t
+{
+    bool handleEvent(const LLSD& userdata)
+    {
+        LLAvatarActions::showPicks(gAgent.getID());
+        return true;
+    }
 };
 
 class LLToggleAgentProfile : public view_listener_t
@@ -9733,19 +9849,30 @@ class FSAdvancedCheckEnabledDoubleClickAction : public view_listener_t
 };
 
 // <FS:Beq> Add telemetry controls to the viewer menus
-class FSTelemetryToggleActive : public view_listener_t
+class FSProfilerToggle : public view_listener_t
 {
-protected:
-
 	bool handleEvent(const LLSD& userdata)
 	{
-		BOOL checked = gSavedSettings.getBOOL( "FSTelemetryActive" );
-		gSavedSettings.setBOOL( "FSTelemetryActive", !checked );
-		FSTelemetry::active = !checked;
+		BOOL checked = gSavedSettings.getBOOL( "ProfilingActive" );
+		gSavedSettings.setBOOL( "ProfilingActive", !checked );
+		LLProfiler::active = !checked;
 		return true;
 	}
 };
+
+class FSProfilerCheckEnabled : public view_listener_t
+{
+	bool handleEvent(const LLSD& userdata)
+	{
+#ifdef TRACY_ENABLE
+		return true;
+#else
+		return false;
+#endif
+	}
+};
 // </FS:Beq>
+
 void menu_toggle_attached_lights(void* user_data)
 {
 	LLPipeline::sRenderAttachedLights = gSavedSettings.getBOOL("RenderAttachedLights");
@@ -10770,6 +10897,7 @@ class LLViewHighlightTransparent : public view_listener_t
 // [RLVa:KB] - @edit and @viewtransparent
 		LLDrawPoolAlpha::sShowDebugAlpha = (!LLDrawPoolAlpha::sShowDebugAlpha) && (RlvActions::canHighlightTransparent());
 // [/RLVa:KB]
+        gPipeline.resetVertexBuffers();
 		return true;
 	}
 };
@@ -12125,7 +12253,8 @@ void initialize_menus()
 	commit.add("Develop.ClearCache", boost::bind(&handle_cache_clear_immediately) );
 
 	// <FS:Beq/> Add telemetry controls to the viewer Develop menu (Toggle profiling)
-	view_listener_t::addMenu(new FSTelemetryToggleActive(), "Develop.ToggleTelemetry");
+	view_listener_t::addMenu(new FSProfilerToggle(), "Develop.ToggleProfiling");
+	view_listener_t::addMenu(new FSProfilerCheckEnabled(), "Develop.EnableProfiling");
 
 	// Admin >Object
 	view_listener_t::addMenu(new LLAdminForceTakeCopy(), "Admin.ForceTakeCopy");
@@ -12196,11 +12325,14 @@ void initialize_menus()
 	view_listener_t::addMenu(new LLAvatarTexRefresh(), "Avatar.TexRefresh");	// ## Zi: Texture Refresh
 
 	view_listener_t::addMenu(new LLAvatarToggleMyProfile(), "Avatar.ToggleMyProfile");
+	view_listener_t::addMenu(new LLAvatarTogglePicks(), "Avatar.TogglePicks");
 	view_listener_t::addMenu(new LLAvatarToggleSearch(), "Avatar.ToggleSearch");
 	view_listener_t::addMenu(new LLAvatarResetSkeleton(), "Avatar.ResetSkeleton");
 	view_listener_t::addMenu(new LLAvatarEnableResetSkeleton(), "Avatar.EnableResetSkeleton");
 	view_listener_t::addMenu(new LLAvatarResetSkeletonAndAnimations(), "Avatar.ResetSkeletonAndAnimations");
+	view_listener_t::addMenu(new LLAvatarResetSelfSkeletonAndAnimations(), "Avatar.ResetSelfSkeletonAndAnimations");
 	enable.add("Avatar.IsMyProfileOpen", boost::bind(&my_profile_visible));
+    enable.add("Avatar.IsPicksTabOpen", boost::bind(&picks_tab_visible));
 
 	commit.add("Avatar.OpenMarketplace", boost::bind(&LLWeb::loadURLExternal, gSavedSettings.getString("MarketplaceURL")));
 	
@@ -12210,6 +12342,7 @@ void initialize_menus()
 	// Object pie menu
 	view_listener_t::addMenu(new LLObjectBuild(), "Object.Build");
 	commit.add("Object.Touch", boost::bind(&handle_object_touch));
+	commit.add("Object.ShowOriginal", boost::bind(&handle_object_show_original));
 	commit.add("Object.SitOrStand", boost::bind(&handle_object_sit_or_stand));
 	commit.add("Object.Delete", boost::bind(&handle_object_delete));
 	view_listener_t::addMenu(new LLObjectAttachToAvatar(true), "Object.AttachToAvatar");
@@ -12251,6 +12384,8 @@ void initialize_menus()
 	enable.add("Object.EnableBuy", boost::bind(&enable_buy_object));
 	commit.add("Object.ZoomIn", boost::bind(&handle_look_at_selection, "zoom"));
 	enable.add("Object.EnableScriptInfo", boost::bind(&enable_script_info));	// <FS:CR>
+	enable.add("Object.EnableShowOriginal", boost::bind(&enable_object_show_original)); // <FS:Ansariel> Disable if prevented by RLVa
+
 
 	// Attachment pie menu
 	enable.add("Attachment.Label", boost::bind(&onEnableAttachmentLabel, _1, _2));
@@ -12282,6 +12417,7 @@ void initialize_menus()
 	view_listener_t::addMenu(new LLToggleSpeak(), "ToggleSpeak");
 	view_listener_t::addMenu(new LLPromptShowURL(), "PromptShowURL");
 	view_listener_t::addMenu(new LLShowAgentProfile(), "ShowAgentProfile");
+    view_listener_t::addMenu(new LLShowAgentProfilePicks(), "ShowAgentProfilePicks");
 	view_listener_t::addMenu(new LLToggleAgentProfile(), "ToggleAgentProfile");
 	view_listener_t::addMenu(new LLToggleControl(), "ToggleControl");
     view_listener_t::addMenu(new LLToggleShaderControl(), "ToggleShaderControl");

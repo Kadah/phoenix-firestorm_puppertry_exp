@@ -290,9 +290,17 @@ public:
 		LLSD& with(const String&, const LLSD&);
 		
 		LLSD& operator[](const String&);
-		LLSD& operator[](const char* c)			{ return (*this)[String(c)]; }
+		LLSD& operator[](const char* c)
+        {
+            LL_PROFILE_ZONE_SCOPED_CATEGORY_LLSD;
+            return (*this)[String(c)];
+        }
 		const LLSD& operator[](const String&) const;
-		const LLSD& operator[](const char* c) const	{ return (*this)[String(c)]; }
+		const LLSD& operator[](const char* c) const	
+        {
+            LL_PROFILE_ZONE_SCOPED_CATEGORY_LLSD;
+            return (*this)[String(c)];
+        }
 	//@}
 	
 	/** @name Array Values */
@@ -411,49 +419,6 @@ private:
 public:
 
 	static std::string		typeString(Type type);		// Return human-readable type as a string
-};
-
-struct llsd_select_bool : public std::unary_function<LLSD, LLSD::Boolean>
-{
-	LLSD::Boolean operator()(const LLSD& sd) const
-	{
-		return sd.asBoolean();
-	}
-};
-struct llsd_select_integer : public std::unary_function<LLSD, LLSD::Integer>
-{
-	LLSD::Integer operator()(const LLSD& sd) const
-	{
-		return sd.asInteger();
-	}
-};
-struct llsd_select_real : public std::unary_function<LLSD, LLSD::Real>
-{
-	LLSD::Real operator()(const LLSD& sd) const
-	{
-		return sd.asReal();
-	}
-};
-struct llsd_select_float : public std::unary_function<LLSD, F32>
-{
-	F32 operator()(const LLSD& sd) const
-	{
-		return (F32)sd.asReal();
-	}
-};
-struct llsd_select_uuid : public std::unary_function<LLSD, LLSD::UUID>
-{
-	LLSD::UUID operator()(const LLSD& sd) const
-	{
-		return sd.asUUID();
-	}
-};
-struct llsd_select_string : public std::unary_function<LLSD, LLSD::String>
-{
-	LLSD::String operator()(const LLSD& sd) const
-	{
-		return sd.asString();
-	}
 };
 
 LL_COMMON_API std::ostream& operator<<(std::ostream& s, const LLSD& llsd);

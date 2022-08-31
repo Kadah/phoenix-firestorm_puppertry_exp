@@ -61,6 +61,7 @@ if (LINUX)
 
   list(APPEND media_plugin_cef_SOURCE_FILES ${LINUX_VOLUME_CATCHER})
   set(CMAKE_SHARED_LINKER_FLAGS  "-Wl,--build-id -Wl,-rpath,'$ORIGIN:$ORIGIN/../../lib'")
+  list(APPEND media_plugin_cef_LINK_LIBRARIES llwindow )
 elseif (DARWIN)
   list(APPEND media_plugin_cef_SOURCE_FILES mac_volume_catcher_null.cpp)
   find_library(CORESERVICES_LIBRARY CoreServices)
@@ -87,6 +88,7 @@ add_library(media_plugin_cef
 #  ${MEDIA_PLUGIN_BASE_LIBRARIES}
 #)
 
+
 target_link_libraries(media_plugin_cef
   ${media_plugin_cef_LINK_LIBRARIES}
 )
@@ -111,9 +113,6 @@ if (DARWIN)
     CXX_FLAGS "-std=c++11 -stdlib=libc++"
     LINK_FLAGS "-stdlib=libc++ -exported_symbols_list ${CMAKE_CURRENT_SOURCE_DIR}/../base/media_plugin_base.exp"
   )
-
-  ## turns on C++11 using Cmake
-  target_compile_features(media_plugin_cef PRIVATE cxx_range_for)
 
   add_custom_command(TARGET media_plugin_cef
     POST_BUILD COMMAND ${CMAKE_INSTALL_NAME_TOOL} -change "@executable_path/Chromium Embedded Framework"

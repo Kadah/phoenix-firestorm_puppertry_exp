@@ -273,6 +273,12 @@ void LLViewerRegionImpl::requestBaseCapabilitiesCoro(U64 regionHandle)
             return;
         }
 
+        if (!LLWorld::instanceExists())
+        {
+            LL_WARNS("AppInit", "Capabilities") << "Attempting to get capabilities, but world no longer exists!" << LL_ENDL;
+            return;
+        }
+
         regionp = LLWorld::getInstance()->getRegionFromHandle(regionHandle);
         if (!regionp) //region was removed
         {
@@ -331,6 +337,32 @@ void LLViewerRegionImpl::requestBaseCapabilitiesCoro(U64 regionHandle)
 
         if (LLApp::isExiting() || gDisconnected)
         {
+            LL_DEBUGS("AppInit", "Capabilities") << "Shutting down" << LL_ENDL;
+            return;
+        }
+
+        if (!result.isMap() || result.has("error"))
+        {
+            LL_WARNS("AppInit", "Capabilities") << "Malformed response" << LL_ENDL;
+            // setup for retry.
+            continue;
+        }
+
+        LLSD httpResults = result["http_result"];
+        LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
+        if (!status)
+        {
+            LL_WARNS("AppInit", "Capabilities") << "HttpStatus error " << LL_ENDL;
+            // setup for retry.
+            continue;
+        }
+
+        // remove the http_result from the llsd
+        result.erase("http_result");
+
+        if (!LLWorld::instanceExists())
+        {
+            LL_WARNS("AppInit", "Capabilities") << "Received capabilities, but world no longer exists!" << LL_ENDL;
             return;
         }
 
@@ -344,7 +376,7 @@ void LLViewerRegionImpl::requestBaseCapabilitiesCoro(U64 regionHandle)
         impl = regionp->getRegionImplNC();
 
         // <FS:Ansariel> Fix seed cap retry count
-        //++impl->mSeedCapAttempts;
+        //++(impl->mSeedCapAttempts);
 
         if (id != impl->mHttpResponderID) // region is no longer referring to this request
         {
@@ -353,27 +385,6 @@ void LLViewerRegionImpl::requestBaseCapabilitiesCoro(U64 regionHandle)
             ++(impl->mSeedCapAttempts); // <FS:Ansariel> Fix seed cap retry count
             continue;
         }
-
-        if (!result.isMap() || result.has("error"))
-        {
-            LL_WARNS("AppInit", "Capabilities") << "Malformed response" << LL_ENDL;
-            // setup for retry.
-            ++(impl->mSeedCapAttempts); // <FS:Ansariel> Fix seed cap retry count
-            continue;
-        }
-
-        LLSD httpResults = result["http_result"];
-        LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
-        if (!status)
-        {
-            LL_WARNS("AppInit", "Capabilities") << "HttpStatus error " << LL_ENDL;
-            // setup for retry.
-            ++(impl->mSeedCapAttempts); // <FS:Ansariel> Fix seed cap retry count
-            continue;
-        }
-
-        // remove the http_result from the llsd
-        result.erase("http_result");
 
         LLSD::map_const_iterator iter;
         for (iter = result.beginMap(); iter != result.endMap(); ++iter)
@@ -422,7 +433,14 @@ void LLViewerRegionImpl::requestBaseCapabilitiesCompleteCoro(U64 regionHandle)
     // This loop is used for retrying a capabilities request.
     do
     {
-        regionp = LLWorld::getInstance()->getRegionFromHandle(regionHandle);
+        LLWorld *world_inst = LLWorld::getInstance(); // Not a singleton!
+        if (!world_inst)
+        {
+            LL_WARNS("AppInit", "Capabilities") << "Attempting to get capabilities, but world no longer exists!" << LL_ENDL;
+            return;
+        }
+
+        regionp = world_inst->getRegionFromHandle(regionHandle);
         if (!regionp) //region was removed
         {
             LL_WARNS("AppInit", "Capabilities") << "Attempting to get capabilities for region that no longer exists!" << LL_ENDL;
@@ -445,6 +463,7 @@ void LLViewerRegionImpl::requestBaseCapabilitiesCompleteCoro(U64 regionHandle)
         LL_INFOS("AppInit", "Capabilities") << "Requesting second Seed from " << url << " for region " << regionp->getRegionID() << LL_ENDL;
 
         regionp = NULL;
+        world_inst = NULL;
         result = httpAdapter->postAndSuspend(httpRequest, url, capabilityNames);
 
         LLSD httpResults = result["http_result"];
@@ -460,7 +479,14 @@ void LLViewerRegionImpl::requestBaseCapabilitiesCompleteCoro(U64 regionHandle)
             break;
         }
 
-        regionp = LLWorld::getInstance()->getRegionFromHandle(regionHandle);
+        world_inst = LLWorld::getInstance();
+        if (!world_inst)
+        {
+            LL_WARNS("AppInit", "Capabilities") << "Received capabilities, but world no longer exists!" << LL_ENDL;
+            return;
+        }
+
+        regionp = world_inst->getRegionFromHandle(regionHandle);
         if (!regionp) //region was removed
         {
             LL_WARNS("AppInit", "Capabilities") << "Received capabilities for region that no longer exists!" << LL_ENDL;
@@ -544,7 +570,14 @@ void LLViewerRegionImpl::requestSimulatorFeatureCoro(std::string url, U64 region
             break;
         }
 
-        regionp = LLWorld::getInstance()->getRegionFromHandle(regionHandle);
+        LLWorld *world_inst = LLWorld::getInstance(); // Not a singleton!
+        if (!world_inst)
+        {
+            LL_WARNS("AppInit", "Capabilities") << "Attempting to request Sim Feature, but world no longer exists!" << LL_ENDL;
+            return;
+        }
+
+        regionp = world_inst->getRegionFromHandle(regionHandle);
         if (!regionp) //region was removed
         {
             LL_WARNS("AppInit", "SimulatorFeatures") << "Attempting to request Sim Feature for region that no longer exists!" << LL_ENDL;
@@ -552,6 +585,7 @@ void LLViewerRegionImpl::requestSimulatorFeatureCoro(std::string url, U64 region
         }
 
         regionp = NULL;
+        world_inst = NULL;
         LLSD result = httpAdapter->getAndSuspend(httpRequest, url);
 
         LLSD httpResults = result["http_result"];
@@ -570,7 +604,14 @@ void LLViewerRegionImpl::requestSimulatorFeatureCoro(std::string url, U64 region
         // remove the http_result from the llsd
         result.erase("http_result");
 
-        regionp = LLWorld::getInstance()->getRegionFromHandle(regionHandle);
+        world_inst = LLWorld::getInstance();
+        if (!world_inst)
+        {
+            LL_WARNS("AppInit", "Capabilities") << "Attempting to request Sim Feature, but world no longer exists!" << LL_ENDL;
+            return;
+        }
+
+        regionp = world_inst->getRegionFromHandle(regionHandle);
         if (!regionp) //region was removed
         {
             LL_WARNS("AppInit", "SimulatorFeatures") << "Attempting to set Sim Feature for region that no longer exists!" << LL_ENDL;
@@ -2242,7 +2283,14 @@ public:
 		const LLSD& input) const
 	{
 		LLHost host(input["sender"].asString());
-		LLViewerRegion* region = LLWorld::getInstance()->getRegion(host);
+
+        LLWorld *world_inst = LLWorld::getInstance(); // Not a singleton!
+        if (!world_inst)
+        {
+            return;
+        }
+
+		LLViewerRegion* region = world_inst->getRegion(host);
 		if( !region )
 		{
 			return;
@@ -3171,6 +3219,7 @@ void LLViewerRegionImpl::buildCapabilityNames(LLSD& capabilityNames)
 	capabilityNames.append("AcceptFriendship");
 	capabilityNames.append("AcceptGroupInvite"); // ReadOfflineMsgs recieved messages only!!!
 	capabilityNames.append("AgentPreferences");
+    capabilityNames.append("AgentProfile");
 	capabilityNames.append("AgentState");
 	capabilityNames.append("AttachmentResources");
 	capabilityNames.append("AvatarPickerSearch");
@@ -3241,6 +3290,7 @@ void LLViewerRegionImpl::buildCapabilityNames(LLSD& capabilityNames)
 	capabilityNames.append("ObjectAnimation");
 	capabilityNames.append("ObjectMedia");
 	capabilityNames.append("ObjectMediaNavigate");
+	capabilityNames.append("ObjectNavMeshProperties");
 	capabilityNames.append("ParcelPropertiesUpdate");
 	capabilityNames.append("ParcelVoiceInfoRequest");
 	capabilityNames.append("ProductInfoRequest");
@@ -3276,6 +3326,7 @@ void LLViewerRegionImpl::buildCapabilityNames(LLSD& capabilityNames)
 	capabilityNames.append("UpdateScriptTask");
     capabilityNames.append("UpdateSettingsAgentInventory");
     capabilityNames.append("UpdateSettingsTaskInventory");
+    capabilityNames.append("UploadAgentProfileImage");
 	capabilityNames.append("UploadBakedTexture");
     capabilityNames.append("UserInfo");
 	capabilityNames.append("ViewerAsset"); 

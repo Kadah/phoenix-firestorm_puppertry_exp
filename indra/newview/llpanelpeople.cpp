@@ -359,7 +359,9 @@ public:
 
 		// For notification when SIP online status changes.
 		LLVoiceClient::getInstance()->addObserver(this);
-		mInvObserver = new LLInventoryFriendCardObserver(this);
+		// <FS:Ansariel> Disconnect LLFriendCardsManager
+		if (gSavedSettings.getBOOL("FSCreateCallingCards"))
+			mInvObserver = new LLInventoryFriendCardObserver(this);
 	}
 
 	~LLFriendListUpdater()
@@ -412,7 +414,8 @@ public:
 
 private:
 	U32 mMask;
-	LLInventoryFriendCardObserver* mInvObserver;
+	// <FS:Ansariel> Disconnect LLFriendCardsManager
+	LLInventoryFriendCardObserver* mInvObserver{ nullptr };
 	bool mIsActive;
 
 	/**

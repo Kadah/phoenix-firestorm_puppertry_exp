@@ -17,7 +17,7 @@ include(GLIB)
 include(DragDrop)
 include(EXPAT)
 include(FMODSTUDIO)
-include(GLOD)
+include(GLOD) # <FS:Beq/> restore GLOD
 include(Hunspell)
 include(JPEGEncoderBasic)
 include(JsonCpp)
@@ -33,6 +33,7 @@ include(LLInventory)
 include(LLKDU)
 include(LLLogin)
 include(LLMath)
+include(LLMeshOptimizer)
 include(LLMessage)
 include(LLPhysicsExtensions)
 include(LLPlugin)
@@ -50,11 +51,13 @@ include(OpenSSL)
 include(PNG)
 include(TemplateCheck)
 include(ThreeJS)
+include(Tracy)
 include(UI)
 include(UnixInstall)
 include(ViewerMiscLibs)
 #include(ViewerManager) # <FS:Ansariel> Remove VMP
 include(VisualLeakDetector)
+include(ZLIBNG)
 include(URIPARSER)
 include(Growl)
 include(ColladaDom)
@@ -81,7 +84,7 @@ endif(FMODSTUDIO)
 include_directories(
     ${DBUSGLIB_INCLUDE_DIRS}
     ${JSONCPP_INCLUDE_DIR}
-    ${GLOD_INCLUDE_DIR}
+    ${GLOD_INCLUDE_DIR} # <FS:Beq/> restore GLOD
     ${LLAUDIO_INCLUDE_DIRS}
     ${LLCHARACTER_INCLUDE_DIRS}
     ${LLCOMMON_INCLUDE_DIRS}
@@ -91,6 +94,7 @@ include_directories(
     ${LLKDU_INCLUDE_DIRS}
     ${LLINVENTORY_INCLUDE_DIRS}
     ${LLMATH_INCLUDE_DIRS}
+    ${LLMESHOPTIMIZER_INCLUDE_DIRS}
     ${LLMESSAGE_INCLUDE_DIRS}
     ${LLPLUGIN_INCLUDE_DIRS}
     ${LLPRIMITIVE_INCLUDE_DIRS}
@@ -100,21 +104,22 @@ include_directories(
     ${LLWINDOW_INCLUDE_DIRS}
     ${LLXML_INCLUDE_DIRS}
     ${LLLOGIN_INCLUDE_DIRS}
-    ${LIBS_PREBUILT_DIR}/include/collada
-    ${LIBS_PREBUILD_DIR}/include/hunspell
     ${OPENAL_LIB_INCLUDE_DIRS}
-    ${LIBS_PREBUILT_DIR}/include/collada/1.4
     ${GROWL_INCLUDE_DIRS}
-    ${COLLADA_INCLUDE_DIRS}
     ${LLAPPEARANCE_INCLUDE_DIRS}
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_BINARY_DIR}
+    ${TRACY_INCLUDE_DIR}
     )
 
 include_directories(SYSTEM
     ${LLCOMMON_SYSTEM_INCLUDE_DIRS}
     ${LLXML_SYSTEM_INCLUDE_DIRS}
     ${LLPHYSICSEXTENSIONS_INCLUDE_DIRS}
+    ${LIBS_PREBUILT_DIR}/include/collada
+    ${LIBS_PREBUILT_DIR}/include/collada/1.4
+    ${LIBS_PREBUILD_DIR}/include/hunspell
+    ${COLLADA_INCLUDE_DIRS}
     )
 
 if (USE_BUGSPLAT)
@@ -165,9 +170,9 @@ set(viewer_SOURCE_FILES
     fsfloaterim.cpp
     fsfloaterimcontainer.cpp
     fsfloaternearbychat.cpp
+    fsfloaterpartialinventory.cpp
     fsfloaterplacedetails.cpp
     fsfloaterposestand.cpp
-    fsfloaterprofile.cpp
     fsfloaterprotectedfolders.cpp
     fsfloaterradar.cpp
     fsfloatersearch.cpp
@@ -189,13 +194,10 @@ set(viewer_SOURCE_FILES
     fsnearbychathub.cpp
     fsnearbychatvoicemonitor.cpp
     fspanelblocklist.cpp
-    fspanelclassified.cpp
     fspanelcontactsets.cpp
     fspanelimcontrolpanel.cpp
     fspanellogin.cpp
     fspanelprefs.cpp
-    fspanelprofile.cpp
-    fspanelprofileclassifieds.cpp
     fspanelradar.cpp
     fsparticipantlist.cpp
     fspose.cpp
@@ -341,6 +343,7 @@ set(viewer_SOURCE_FILES
     llfloatercamera.cpp
     llfloatercamerapresets.cpp
     llfloaterchatvoicevolume.cpp
+    llfloaterclassified.cpp
     llfloatercolorpicker.cpp
     llfloaterconversationlog.cpp
     llfloaterconversationpreview.cpp
@@ -392,7 +395,7 @@ set(viewer_SOURCE_FILES
     llfloaternamedesc.cpp
     llfloaternotificationsconsole.cpp
     llfloaternotificationstabbed.cpp
-    llfloateroutfitphotopreview.cpp
+    llfloateroutfitphotopreview.cpp 
     llfloateroutfitsnapshot.cpp
     llfloaterobjectweights.cpp
     llfloateropenobject.cpp
@@ -405,10 +408,12 @@ set(viewer_SOURCE_FILES
     fsfloaterperformance.cpp 
     llfloaterperms.cpp
     llfloaterpostprocess.cpp
+    llfloaterprofile.cpp
     llfloaterpreference.cpp
     # llfloaterpreferencesgraphicsadvanced.cpp
     llfloaterpreferenceviewadvanced.cpp
     llfloaterpreviewtrash.cpp
+    llfloaterprofiletexture.cpp
     llfloaterproperties.cpp
     llfloaterregiondebugconsole.cpp
     llfloaterregioninfo.cpp
@@ -443,7 +448,6 @@ set(viewer_SOURCE_FILES
     llfloatervoiceeffect.cpp
     llfloatervoicevolume.cpp
     llfloaterwebcontent.cpp
-    llfloaterwebprofile.cpp
     llfloaterwhitelistentry.cpp
     llfloaterwindowsize.cpp
     llfloaterworldmap.cpp
@@ -510,7 +514,6 @@ set(viewer_SOURCE_FILES
     llloginhandler.cpp
     lllogininstance.cpp
     llmachineid.cpp
-    llmainlooprepeater.cpp
     llmanip.cpp
     llmaniprotate.cpp
     llmanipscale.cpp
@@ -590,7 +593,6 @@ set(viewer_SOURCE_FILES
     llpanelmediasettingsgeneral.cpp
     llpanelmediasettingspermissions.cpp
     llpanelmediasettingssecurity.cpp
-    llpanelme.cpp
     llpanelnearbymedia.cpp
     llpanelobject.cpp
     llpanelobjectinventory.cpp
@@ -600,8 +602,6 @@ set(viewer_SOURCE_FILES
     llpanelpeople.cpp
     llpanelpeoplemenus.cpp
     llpanelpermissions.cpp
-    llpanelpick.cpp
-    llpanelpicks.cpp
     llpanelplaceinfo.cpp
     llpanelplaceprofile.cpp
     llpanelplaces.cpp
@@ -610,6 +610,8 @@ set(viewer_SOURCE_FILES
     llpanelpresetspulldown.cpp
     llpanelprimmediacontrols.cpp
     llpanelprofile.cpp
+    llpanelprofileclassifieds.cpp
+    llpanelprofilepicks.cpp
     llpanelsnapshot.cpp
     llpanelsnapshotinventory.cpp
     llpanelsnapshotlocal.cpp
@@ -706,11 +708,8 @@ set(viewer_SOURCE_FILES
     llsyntaxid.cpp
     llsyswellitem.cpp
     llsyswellwindow.cpp
-    lltelemetry.cpp
     llteleporthistory.cpp
     llteleporthistorystorage.cpp
-    lltextureatlas.cpp
-    lltextureatlasmanager.cpp
     lltexturecache.cpp
     lltexturectrl.cpp
     lltexturefetch.cpp
@@ -943,9 +942,9 @@ set(viewer_HEADER_FILES
     fsfloaterim.h
     fsfloaterimcontainer.h
     fsfloaternearbychat.h
+    fsfloaterpartialinventory.h
     fsfloaterplacedetails.h
     fsfloaterposestand.h
-    fsfloaterprofile.h
     fsfloaterprotectedfolders.h
     fsfloaterradar.h
     fsfloatersearch.h
@@ -969,12 +968,9 @@ set(viewer_HEADER_FILES
     fsnearbychatvoicemonitor.h
     fspanelblocklist.h
     fspanelcontactsets.h
-    fspanelclassified.h
     fspanelimcontrolpanel.h
     fspanellogin.h
     fspanelprefs.h
-    fspanelprofile.h
-    fspanelprofileclassifieds.h
     fspanelradar.h
     fsparticipantlist.h
     fspose.h
@@ -1122,6 +1118,7 @@ set(viewer_HEADER_FILES
     llfloatercamerapresets.h
     llfloatercamera.h
     llfloaterchatvoicevolume.h
+    llfloaterclassified.h
     llfloatercolorpicker.h
     llfloaterconversationlog.h
     llfloaterconversationpreview.h
@@ -1189,10 +1186,12 @@ set(viewer_HEADER_FILES
     fsfloaterperformance.h
     llfloaterperms.h
     llfloaterpostprocess.h
+    llfloaterprofile.h
     llfloaterpreference.h
     # llfloaterpreferencesgraphicsadvanced.h
     llfloaterpreferenceviewadvanced.h
     llfloaterpreviewtrash.h
+    llfloaterprofiletexture.h
     llfloaterproperties.h
     llfloaterregiondebugconsole.h
     llfloaterregioninfo.h
@@ -1227,7 +1226,6 @@ set(viewer_HEADER_FILES
     llfloatervoiceeffect.h
     llfloatervoicevolume.h
     llfloaterwebcontent.h
-    llfloaterwebprofile.h
     llfloaterwhitelistentry.h
     llfloaterwindowsize.h
     llfloaterworldmap.h
@@ -1292,7 +1290,6 @@ set(viewer_HEADER_FILES
     llloginhandler.h
     lllogininstance.h
     llmachineid.h
-    llmainlooprepeater.h
     llmanip.h
     llmaniprotate.h
     llmanipscale.h
@@ -1364,7 +1361,6 @@ set(viewer_HEADER_FILES
     llpanelmediasettingsgeneral.h
     llpanelmediasettingspermissions.h
     llpanelmediasettingssecurity.h
-    llpanelme.h
     llpanelnearbymedia.h
     llpanelobject.h
     llpanelobjectinventory.h
@@ -1374,8 +1370,6 @@ set(viewer_HEADER_FILES
     llpanelpeople.h
     llpanelpeoplemenus.h
     llpanelpermissions.h
-    llpanelpick.h
-    llpanelpicks.h
     llpanelplaceinfo.h
     llpanelplaceprofile.h
     llpanelplaces.h
@@ -1384,6 +1378,8 @@ set(viewer_HEADER_FILES
     llpanelpresetspulldown.h
     llpanelprimmediacontrols.h
     llpanelprofile.h
+    llpanelprofileclassifieds.h
+    llpanelprofilepicks.h
     llpanelsnapshot.h
     llpanelteleporthistory.h
     llpaneltiptoast.h
@@ -1481,8 +1477,6 @@ set(viewer_HEADER_FILES
     lltable.h
     llteleporthistory.h
     llteleporthistorystorage.h
-    lltextureatlas.h
-    lltextureatlasmanager.h
     lltexturecache.h
     lltexturectrl.h
     lltexturefetch.h
@@ -1703,7 +1697,7 @@ file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/viewer_version.txt"
            "${VIEWER_SHORT_VERSION}.${VIEWER_VERSION_REVISION}\n")
 
 set_source_files_properties(
-   llversioninfo.cpp tests/llversioninfo_test.cpp
+   llversioninfo.cpp tests/llversioninfo_test.cpp 
    PROPERTIES
 # <FS:TS> The next line causes a full rebuild of the entire newview
 #         directory every time the Mercurial revision number changes.
@@ -2006,6 +2000,7 @@ if (WINDOWS)
         ${WINDOWS_LIBRARIES}
         comdlg32
         dxguid
+        imm32
         kernel32
         odbc32
         odbccp32
@@ -2120,6 +2115,8 @@ set(viewer_APPSETTINGS_FILES
     ${CMAKE_SOURCE_DIR}/../etc/message.xml
     ${CMAKE_SOURCE_DIR}/../scripts/messages/message_template.msg
     packages-info.txt
+    featuretable.txt
+    featuretable_mac.txt
     )
 	
 if (WINDOWS)
@@ -2206,17 +2203,6 @@ add_executable(${VIEWER_BINARY_NAME}
     ${viewer_SOURCE_FILES}
     )
 
-if (SDL_FOUND)
-    set_property(TARGET ${VIEWER_BINARY_NAME}
-            PROPERTY COMPILE_DEFINITIONS LL_SDL=1
-            )
-endif (SDL_FOUND)
-if (SDL2_FOUND)
-    set_property(TARGET ${VIEWER_BINARY_NAME}
-            PROPERTY COMPILE_DEFINITIONS LL_SDL2=1 LL_SDL=1
-            )
-endif ()
-
 if (USE_BUGSPLAT)
   set_property(TARGET ${VIEWER_BINARY_NAME}
     PROPERTY COMPILE_DEFINITIONS "${BUGSPLAT_DEFINE}")
@@ -2273,9 +2259,11 @@ if (WINDOWS)
       ${SHARED_LIB_STAGING_DIR}/${CMAKE_CFG_INTDIR}/libapr-1.dll
       ${SHARED_LIB_STAGING_DIR}/${CMAKE_CFG_INTDIR}/libaprutil-1.dll
       ${SHARED_LIB_STAGING_DIR}/${CMAKE_CFG_INTDIR}/libapriconv-1.dll
+      # <FS:Beq> Restore GLOD build dependencies
       ${SHARED_LIB_STAGING_DIR}/Release/glod.dll
       ${SHARED_LIB_STAGING_DIR}/RelWithDebInfo/glod.dll
       ${SHARED_LIB_STAGING_DIR}/Debug/glod.dll
+      # </FS:Beq>
       ${SHARED_LIB_STAGING_DIR}/Release/libcollada14dom22.dll
       ${SHARED_LIB_STAGING_DIR}/RelWithDebInfo/libcollada14dom22.dll
       ${SHARED_LIB_STAGING_DIR}/Debug/libcollada14dom22-d.dll
@@ -2303,10 +2291,6 @@ if (WINDOWS)
       media_plugin_libvlc
       #media_plugin_example # <FS:Ansariel> Don't package example plugin
       )
-
-    if (NOT USE_BUGSPLAT)
-        LIST(APPEND COPY_INPUT_DEPENDENCIES windows-crash-logger)
-    endif (NOT USE_BUGSPLAT)
 
     # <FS:Ansariel> Only copy OpenJPEG dll if needed
     if (NOT USE_KDU)
@@ -2477,7 +2461,7 @@ endif (WINDOWS)
 # one of these being libz where you can find four or more versions in play
 # at once.  On Linux, libz can be found at link and run time via a number
 # of paths:
-#
+#     
 #      => -lfreetype
 #        => libz.so.1 (on install machine, not build)
 #      => -lSDL
@@ -2488,20 +2472,21 @@ endif (WINDOWS)
 #
 # We generally want the newest version of the library to provide all symbol
 # resolution.  To that end, when using static archives, the *_PRELOAD_ARCHIVES
-# variables, PNG_PRELOAD_ARCHIVES and ZLIB_PRELOAD_ARCHIVES, get the archives
+# variables, PNG_PRELOAD_ARCHIVES and ZLIBNG_PRELOAD_ARCHIVES, get the archives
 # dumped into the target binary and runtime lookup will find the most
 # modern version.
 
 target_link_libraries(${VIEWER_BINARY_NAME}
     ${LEGACY_STDIO_LIBS}
     ${PNG_PRELOAD_ARCHIVES}
-    ${ZLIB_PRELOAD_ARCHIVES}
+    ${ZLIBNG_PRELOAD_ARCHIVES}
     ${URIPARSER_PRELOAD_ARCHIVES}
     ${GOOGLE_PERFTOOLS_LIBRARIES}
     ${LLAUDIO_LIBRARIES}
     ${LLCHARACTER_LIBRARIES}
     ${LLIMAGE_LIBRARIES}
     ${LLINVENTORY_LIBRARIES}
+    ${LLMESHOPTIMIZER_LIBRARIES}
     ${LLMESSAGE_LIBRARIES}
     ${LLPLUGIN_LIBRARIES}
     ${LLPRIMITIVE_LIBRARIES}
@@ -2528,10 +2513,10 @@ target_link_libraries(${VIEWER_BINARY_NAME}
     ${OPENGL_LIBRARIES}
     ${FMODWRAPPER_LIBRARY} # must come after LLAudio
     ${OPENAL_LIBRARIES}
-    ${GLOD_LIBRARIES}
+    ${GLOD_LIBRARIES} # <FS:Beq/> restore GLOD dependencies    
     ${OPENGL_LIBRARIES}
     ${JSONCPP_LIBRARIES}
-    ${SDL_LIBRARY}
+    #${SDL_LIBRARY}
     ${SMARTHEAP_LIBRARY}
     ${UI_LIBRARIES}
     ${WINDOWS_LIBRARIES}
@@ -2543,6 +2528,7 @@ target_link_libraries(${VIEWER_BINARY_NAME}
     ${LLPHYSICS_LIBRARIES}
     ${LLPHYSICSEXTENSIONS_LIBRARIES}
     ${LLAPPEARANCE_LIBRARIES}
+    ${TRACY_LIBRARY}
     ${GROWL_LIBRARY}
     ${GIO_LIBRARIES}
     )
@@ -2689,7 +2675,7 @@ if (DARWIN)
 
   # https://blog.kitware.com/upcoming-in-cmake-2-8-12-osx-rpath-support/
   set(CMAKE_MACOSX_RPATH 1)
-
+  
   set_target_properties(
     ${VIEWER_BINARY_NAME}
     PROPERTIES
@@ -2788,31 +2774,32 @@ if (PACKAGE AND (RELEASE_CRASH_REPORTING OR NON_RELEASE_CRASH_REPORTING) AND VIE
   if (USE_BUGSPLAT)
     # BugSplat symbol-file generation
     if (WINDOWS)
+	#<FS:ND> Comment this out, we do our own symbol package which also includes the exe and build_data.json 
       # Just pack up a tarball containing only the .pdb file for the
       # executable. Because we intend to use cygwin tar, we must render
       # VIEWER_SYMBOL_FILE in cygwin path syntax.
-      execute_process(COMMAND "cygpath" "-u" "${VIEWER_SYMBOL_FILE}"
-        OUTPUT_VARIABLE VIEWER_SYMBOL_FILE_CYGWIN
-        OUTPUT_STRIP_TRAILING_WHITESPACE)
-      execute_process(COMMAND "cygpath" "-u" "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}"
-        OUTPUT_VARIABLE PARENT_DIRECTORY_CYGWIN
-        OUTPUT_STRIP_TRAILING_WHITESPACE)
-      add_custom_command(OUTPUT "${VIEWER_SYMBOL_FILE}"
-        # Use of 'tar ...j' here assumes VIEWER_SYMBOL_FILE endswith .tar.bz2;
-        # testing a string suffix is painful enough in CMake language that
-        # we'll continue assuming it until forced to generalize.
-        COMMAND "tar"
-        ARGS
-          "cjf"
-          "${VIEWER_SYMBOL_FILE_CYGWIN}"
-          "-C"
-          "${PARENT_DIRECTORY_CYGWIN}"
-          "firestorm-bin.pdb"
-        DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/firestorm-bin.pdb"
-        COMMENT "Packing viewer PDB into ${VIEWER_SYMBOL_FILE_CYGWIN}"
-        )
-      add_custom_target(generate_symbols DEPENDS "${VIEWER_SYMBOL_FILE}" ${VIEWER_BINARY_NAME})
-      add_dependencies(generate_symbols ${VIEWER_BINARY_NAME})
+      # execute_process(COMMAND "cygpath" "-u" "${VIEWER_SYMBOL_FILE}"
+        # OUTPUT_VARIABLE VIEWER_SYMBOL_FILE_CYGWIN
+        # OUTPUT_STRIP_TRAILING_WHITESPACE)
+      # execute_process(COMMAND "cygpath" "-u" "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}"
+        # OUTPUT_VARIABLE PARENT_DIRECTORY_CYGWIN
+        # OUTPUT_STRIP_TRAILING_WHITESPACE)
+      # add_custom_command(OUTPUT "${VIEWER_SYMBOL_FILE}"
+        # # Use of 'tar ...j' here assumes VIEWER_SYMBOL_FILE endswith .tar.bz2;
+        # # testing a string suffix is painful enough in CMake language that
+        # # we'll continue assuming it until forced to generalize.
+        # COMMAND "tar"
+        # ARGS
+          # "cjf"
+          # "${VIEWER_SYMBOL_FILE_CYGWIN}"
+          # "-C"
+          # "${PARENT_DIRECTORY_CYGWIN}"
+          # "firestorm-bin.pdb"
+        # DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/firestorm-bin.pdb"
+        # COMMENT "Packing viewer PDB into ${VIEWER_SYMBOL_FILE_CYGWIN}"
+        # )
+      # add_custom_target(generate_symbols DEPENDS "${VIEWER_SYMBOL_FILE}" ${VIEWER_BINARY_NAME})
+      # add_dependencies(generate_symbols ${VIEWER_BINARY_NAME})
     endif (WINDOWS)
     if (DARWIN)
       # Have to run dsymutil first, then pack up the resulting .dSYM directory
@@ -2871,7 +2858,7 @@ if (PACKAGE AND (RELEASE_CRASH_REPORTING OR NON_RELEASE_CRASH_REPORTING) AND VIE
     endif (LINUX)
   endif (USE_BUGSPLAT)
 
-  if (NOT LINUX) #Linux generates symbols via viewer_manifest.py/fs_viewer_manifest.py
+  if (DARWIN) #Linux/Windows generates symbols via viewer_manifest.py/fs_viewer_manifest.py
 	# for both Bugsplat and Breakpad
 	add_dependencies(llpackage generate_symbols)
   endif()
@@ -2897,7 +2884,7 @@ if (LL_TESTS)
     llworldmap.cpp
     llworldmipmap.cpp
     PROPERTIES
-    LL_TEST_ADDITIONAL_SOURCE_FILES
+    LL_TEST_ADDITIONAL_SOURCE_FILES 
     tests/llviewertexture_stub.cpp
     #llviewertexturelist.cpp
   )
@@ -2940,7 +2927,7 @@ if (LL_TESTS)
     llworldmap.cpp
     llworldmipmap.cpp
     PROPERTIES
-    LL_TEST_ADDITIONAL_SOURCE_FILES
+    LL_TEST_ADDITIONAL_SOURCE_FILES 
     tests/llviewertexture_stub.cpp
     #llviewertexturelist.cpp
     LL_TEST_ADDITIONAL_LIBRARIES "${BOOST_SYSTEM_LIBRARY}"

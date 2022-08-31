@@ -63,7 +63,7 @@ LLKeyboardSDL::LLKeyboardSDL()
 	mTranslateKeyMap[SDLK_LCTRL] = KEY_CONTROL;
 	mTranslateKeyMap[SDLK_RCTRL] = KEY_CONTROL;
 	mTranslateKeyMap[SDLK_LALT] = KEY_ALT;
-	mTranslateKeyMap[SDLK_RALT] = KEY_ALT;
+	// mTranslateKeyMap[SDLK_RALT] = KEY_ALT;
 	mTranslateKeyMap[SDLK_HOME] = KEY_HOME;
 	mTranslateKeyMap[SDLK_END] = KEY_END;
 	mTranslateKeyMap[SDLK_PAGEUP] = KEY_PAGE_UP;
@@ -148,7 +148,7 @@ void LLKeyboardSDL::resetMaskKeys()
 		mKeyLevel[KEY_CONTROL] = TRUE;
 	}
 
-	if(mask & KMOD_ALT)
+	if(mask & KMOD_LALT)
 	{
 		mKeyLevel[KEY_ALT] = TRUE;
 	}
@@ -170,7 +170,7 @@ MASK LLKeyboardSDL::updateModifiers(const U32 mask)
 		out_mask |= MASK_CONTROL;
 	}
 
-	if(mask & KMOD_ALT)
+	if(mask & KMOD_LALT)
 	{
 		out_mask |= MASK_ALT;
 	}
@@ -252,7 +252,7 @@ MASK LLKeyboardSDL::currentMask(BOOL for_mouse_event)
 		result |= MASK_SHIFT;
 	if (mask & KMOD_CTRL)
 		result |= MASK_CONTROL;
-	if (mask & KMOD_ALT)
+	if (mask & KMOD_LALT)
 		result |= MASK_ALT;
 
 	// For keyboard events, consider Meta keys equivalent to Control
@@ -565,22 +565,26 @@ U32 LLKeyboardSDL::mapSDL2toWin( U32 aSymbol )
 		mSDL2_to_Win[ SDLK_ESCAPE     ] = (U32)WindowsVK::VK_ESCAPE;
 		mSDL2_to_Win[ SDLK_DELETE     ] = (U32)WindowsVK::VK_DELETE;
 
-		mSDL2_to_Win[ SDLK_KP_PERIOD  ] = (U32)WindowsVK::VK_OEM_PERIOD; // VK_DECIMAL?
 		mSDL2_to_Win[ SDLK_KP_DIVIDE  ] = (U32)WindowsVK::VK_DIVIDE;
 		mSDL2_to_Win[ SDLK_KP_MULTIPLY] = (U32)WindowsVK::VK_MULTIPLY;
 		mSDL2_to_Win[ SDLK_KP_MINUS   ] = (U32)WindowsVK::VK_OEM_MINUS; // VK_SUBSTRACT?
 		mSDL2_to_Win[ SDLK_KP_PLUS    ] = (U32)WindowsVK::VK_OEM_PLUS;  // VK_ADD?
 		mSDL2_to_Win[ SDLK_KP_ENTER   ] = (U32)WindowsVK::VK_RETURN;
-		mSDL2_to_Win[ SDLK_KP_0 ] = (U32)WindowsVK::VK_NUMPAD0;
-		mSDL2_to_Win[ SDLK_KP_1 ] = (U32)WindowsVK::VK_NUMPAD1;
-		mSDL2_to_Win[ SDLK_KP_2 ] = (U32)WindowsVK::VK_NUMPAD2;
-		mSDL2_to_Win[ SDLK_KP_3 ] = (U32)WindowsVK::VK_NUMPAD3;
-		mSDL2_to_Win[ SDLK_KP_4 ] = (U32)WindowsVK::VK_NUMPAD4;
-		mSDL2_to_Win[ SDLK_KP_5 ] = (U32)WindowsVK::VK_NUMPAD5;
-		mSDL2_to_Win[ SDLK_KP_6 ] = (U32)WindowsVK::VK_NUMPAD6;
-		mSDL2_to_Win[ SDLK_KP_7 ] = (U32)WindowsVK::VK_NUMPAD7;
-		mSDL2_to_Win[ SDLK_KP_8 ] = (U32)WindowsVK::VK_NUMPAD8;
-		mSDL2_to_Win[ SDLK_KP_9 ] = (U32)WindowsVK::VK_NUMPAD9;
+
+		// map numpad keys as best we can, mapping to VK_NUMPADx will break things
+		// for SDL2, so we use the actual functions
+		mSDL2_to_Win[ SDLK_KP_0 ] = (U32)WindowsVK::VK_INSERT;		// VK_NUMPAD0
+		mSDL2_to_Win[ SDLK_KP_1 ] = (U32)WindowsVK::VK_END;			// VK_NUMPAD1
+		mSDL2_to_Win[ SDLK_KP_2 ] = (U32)WindowsVK::VK_DOWN;		// VK_NUMPAD2
+		mSDL2_to_Win[ SDLK_KP_3 ] = (U32)WindowsVK::VK_NEXT;		// VK_NUMPAD3
+		mSDL2_to_Win[ SDLK_KP_4 ] = (U32)WindowsVK::VK_LEFT;		// VK_NUMPAD4
+		mSDL2_to_Win[ SDLK_KP_5 ] = (U32)WindowsVK::VK_NUMPAD5;		// has no function
+		mSDL2_to_Win[ SDLK_KP_6 ] = (U32)WindowsVK::VK_RIGHT;		// VK_NUMPAD6
+		mSDL2_to_Win[ SDLK_KP_7 ] = (U32)WindowsVK::VK_HOME;		// VK_NUMPAD7
+		mSDL2_to_Win[ SDLK_KP_8 ] = (U32)WindowsVK::VK_UP;			// VK_NUMPAD8
+		mSDL2_to_Win[ SDLK_KP_9 ] = (U32)WindowsVK::VK_PRIOR;		// VK_NUMPAD9
+
+		mSDL2_to_Win[ SDLK_KP_PERIOD  ] = (U32)WindowsVK::VK_DELETE;	// VK_OEM_PERIOD;
 
 		// ?
 

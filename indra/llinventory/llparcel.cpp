@@ -463,13 +463,13 @@ BOOL LLParcel::importAccessEntry(std::istream& input_stream, LLAccessEntry* entr
         }
         else if ("time" == keyword)
         {
-            S32 when(0);
+            S32 when{};
             LLStringUtil::convertToS32(value, when);
             entry->mTime = when;
         }
         else if ("flags" == keyword)
         {
-            U32 setting(0);
+            U32 setting{};
             LLStringUtil::convertToU32(value, setting);
             entry->mFlags = setting;
         }
@@ -1269,5 +1269,5 @@ U32 LLParcel::countExperienceKeyType( U32 type )
 	return std::count_if(
 		boost::begin(mExperienceKeys | boost::adaptors::map_values), 
 		boost::end(mExperienceKeys | boost::adaptors::map_values), 
-		std::bind2nd(std::equal_to<U32>(), type));
+		[type](U32 key) { return key == type; });
 }

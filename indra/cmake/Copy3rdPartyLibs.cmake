@@ -57,7 +57,7 @@ if(WINDOWS)
         libaprutil-1.dll
         libapriconv-1.dll
         nghttp2.dll
-        glod.dll
+        glod.dll # <FS:Beq> restore GLOD
         libhunspell.dll
         uriparser.dll
         )
@@ -151,6 +151,7 @@ if(WINDOWS)
             msvcp${MSVC_VER}.dll
             #msvcr${MSVC_VER}.dll # <FS:Ansariel> Can't build with older VS versions anyway - no need trying to copy this file
             vcruntime${MSVC_VER}.dll
+            vcruntime${MSVC_VER}_1.dll
             )
         # <FS:Ansariel> Try using the VC runtime redistributables that came with the VS installation first
         if(redist_path AND EXISTS "${redist_path}/${release_msvc_file}")
@@ -198,7 +199,7 @@ elseif(DARWIN)
         libaprutil-1.0.dylib
         libaprutil-1.dylib
         ${EXPAT_COPY}
-        libGLOD.dylib
+        libGLOD.dylib # <FS:Beq> restore GLOD
         libhunspell-1.3.0.dylib
         libndofdev.dylib
         libnghttp2.dylib
@@ -247,7 +248,6 @@ elseif(LINUX)
       set(release_files
         #libdb-5.1.so
         ${EXPAT_COPY}
-        #libGLOD.so
         libhunspell-1.3.so.0.0.0
         libopenal.so
         #libopenjpeg.so

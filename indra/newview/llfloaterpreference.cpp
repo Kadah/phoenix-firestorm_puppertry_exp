@@ -558,60 +558,59 @@ void LLFloaterPreference::processProperties( void* pData, EAvatarProcessorType t
 		const LLAvatarData* pAvatarData = static_cast<const LLAvatarData*>( pData );
 		if (pAvatarData && (gAgent.getID() == pAvatarData->avatar_id) && (pAvatarData->avatar_id != LLUUID::null))
 		{
-			storeAvatarProperties( pAvatarData );
-			processProfileProperties( pAvatarData );
+            mAllowPublish = (bool)(pAvatarData->flags & AVATAR_ALLOW_PUBLISH);
+            mAvatarDataInitialized = true;
+            getChild<LLUICtrl>("online_searchresults")->setValue(mAllowPublish);
 		}
 	}	
 }
 
-void LLFloaterPreference::storeAvatarProperties( const LLAvatarData* pAvatarData )
-{
-	if (gAgent.isInitialized() && (gAgent.getID() != LLUUID::null) && (LLStartUp::getStartupState() == STATE_STARTED))
-	{
-		mAvatarProperties.avatar_id		= pAvatarData->avatar_id;
-		mAvatarProperties.image_id		= pAvatarData->image_id;
-		mAvatarProperties.fl_image_id   = pAvatarData->fl_image_id;
-		mAvatarProperties.about_text	= pAvatarData->about_text;
-		mAvatarProperties.fl_about_text = pAvatarData->fl_about_text;
-		mAvatarProperties.profile_url   = pAvatarData->profile_url;
-		mAvatarProperties.flags		    = pAvatarData->flags;
-		mAvatarProperties.allow_publish	= pAvatarData->flags & AVATAR_ALLOW_PUBLISH;
-
-		mAvatarDataInitialized = true;
-	}
-}
-
-void LLFloaterPreference::processProfileProperties(const LLAvatarData* pAvatarData )
-{
-	getChild<LLUICtrl>("online_searchresults")->setValue( (bool)(pAvatarData->flags & AVATAR_ALLOW_PUBLISH) );	
-}
-
 void LLFloaterPreference::saveAvatarProperties( void )
 {
-	const BOOL allowPublish = getChild<LLUICtrl>("online_searchresults")->getValue();
+    const bool allowPublish = getChild<LLUICtrl>("online_searchresults")->getValue();
 
-	if (allowPublish)
-	{
-		mAvatarProperties.flags |= AVATAR_ALLOW_PUBLISH;
-	}
+    if ((LLStartUp::getStartupState() == STATE_STARTED)
+        && mAvatarDataInitialized
+        && (allowPublish != mAllowPublish))
+    {
+        std::string cap_url = gAgent.getRegionCapability("AgentProfile");
+        if (!cap_url.empty())
+        {
+            mAllowPublish = allowPublish;
 
-	//
-	// NOTE: We really don't want to send the avatar properties unless we absolutely
-	//       need to so we can avoid the accidental profile reset bug, so, if we're
-	//       logged in, the avatar data has been initialized and we have a state change
-	//       for the "allow publish" flag, then set the flag to its new value and send
-	//       the properties update.
-	//
-	// NOTE: The only reason we can not remove this update altogether is because of the
-	//       "allow publish" flag, the last remaining profile setting in the viewer
-	//       that doesn't exist in the web profile.
-	//
-	if ((LLStartUp::getStartupState() == STATE_STARTED) && mAvatarDataInitialized && (allowPublish != mAvatarProperties.allow_publish))
-	{
-		mAvatarProperties.allow_publish = allowPublish;
+            LLCoros::instance().launch("requestAgentUserInfoCoro",
+                boost::bind(saveAvatarPropertiesCoro, cap_url, allowPublish));
+        }
+    }
+}
 
-		LLAvatarPropertiesProcessor::getInstance()->sendAvatarPropertiesUpdate( &mAvatarProperties );
-	}
+void LLFloaterPreference::saveAvatarPropertiesCoro(const std::string cap_url, bool allow_publish)
+{
+    LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
+    LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
+        httpAdapter(new LLCoreHttpUtil::HttpCoroutineAdapter("put_avatar_properties_coro", httpPolicy));
+    LLCore::HttpRequest::ptr_t httpRequest(new LLCore::HttpRequest);
+    LLCore::HttpHeaders::ptr_t httpHeaders;
+
+    LLCore::HttpOptions::ptr_t httpOpts(new LLCore::HttpOptions);
+    httpOpts->setFollowRedirects(true);
+
+    std::string finalUrl = cap_url + "/" + gAgentID.asString();
+    LLSD data;
+    data["allow_publish"] = allow_publish;
+
+    LLSD result = httpAdapter->putAndSuspend(httpRequest, finalUrl, data, httpOpts, httpHeaders);
+
+    LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
+    LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
+
+    if (!status)
+    {
+        LL_WARNS("Preferences") << "Failed to put agent information " << data << " for id " << gAgentID << LL_ENDL;
+        return;
+    }
+
+    LL_DEBUGS("Preferences") << "Agent id: " << gAgentID << " Data: " << data << " Result: " << httpResults << LL_ENDL;
 }
 
 BOOL LLFloaterPreference::postBuild()
@@ -1521,7 +1520,7 @@ void LLFloaterPreference::onBtnOK(const LLSD& userdata)
 	else
 	{
 		// Show beep, pop up dialog, etc.
-		LL_INFOS() << "Can't close preferences!" << LL_ENDL;
+		LL_INFOS("Preferences") << "Can't close preferences!" << LL_ENDL;
 	}
 
 	// <FS:Ansariel> [FS Login Panel]
@@ -2103,14 +2102,11 @@ void LLFloaterPreference::refreshEnabledState()
 
 	////Deferred/SSAO/Shadows
 	//BOOL bumpshiny = gGLManager.mHasCubeMap && LLCubeMap::sUseCubeMaps && LLFeatureManager::getInstance()->isFeatureAvailable("RenderObjectBump") && gSavedSettings.getBOOL("RenderObjectBump");
-	//BOOL transparent_water = LLFeatureManager::getInstance()->isFeatureAvailable("RenderTransparentWater") && gSavedSettings.getBOOL("RenderTransparentWater");
 	//BOOL shaders = gSavedSettings.getBOOL("WindLightUseAtmosShaders");
 	//BOOL enabled = LLFeatureManager::getInstance()->isFeatureAvailable("RenderDeferred") &&
 	//					bumpshiny &&
-	//					transparent_water &&
 	//					shaders && 
 	//					gGLManager.mHasFramebufferObject &&
-	//					gSavedSettings.getBOOL("RenderAvatarVP") &&
 	//					(ctrl_wind_light->get()) ? TRUE : FALSE;
 
 	//ctrl_deferred->setEnabled(enabled);
@@ -2190,9 +2186,6 @@ void LLFloaterPreference::refreshEnabledState()
 	bool bumpshiny = gGLManager.mHasCubeMap && LLCubeMap::sUseCubeMaps && LLFeatureManager::getInstance()->isFeatureAvailable("RenderObjectBump");
 	bumpshiny_ctrl->setEnabled(bumpshiny ? TRUE : FALSE);
 	
-    // Transparent Water
-    LLCheckBoxCtrl* transparent_water_ctrl = getChild<LLCheckBoxCtrl>("TransparentWater");
-
     // <FS:Ansariel> Does not exist
     //LLCheckBoxCtrl* ctrl_enhanced_skel = getChild<LLCheckBoxCtrl>("AvatarEnhancedSkeleton");
     //bool enhanced_skel_enabled = gSavedSettings.getBOOL("IncludeEnhancedSkeleton");
@@ -2200,29 +2193,9 @@ void LLFloaterPreference::refreshEnabledState()
     // </FS:Ansariel>
 
 	// Avatar Mode
-	// Enable Avatar Shaders
-	LLCheckBoxCtrl* ctrl_avatar_vp = getChild<LLCheckBoxCtrl>("AvatarVertexProgram");
 	// Avatar Render Mode
-	LLCheckBoxCtrl* ctrl_avatar_cloth = getChild<LLCheckBoxCtrl>("AvatarCloth");
-	
-	bool avatar_vp_enabled = LLFeatureManager::getInstance()->isFeatureAvailable("RenderAvatarVP");
-	if (LLViewerShaderMgr::sInitialized)
-	{
-		S32 max_avatar_shader = LLViewerShaderMgr::instance()->mMaxAvatarShaderLevel;
-		avatar_vp_enabled = (max_avatar_shader > 0) ? TRUE : FALSE;
-	}
+    getChild<LLCheckBoxCtrl>("AvatarCloth")->setEnabled(TRUE);
 
-	ctrl_avatar_vp->setEnabled(avatar_vp_enabled);
-	
-	if (gSavedSettings.getBOOL("RenderAvatarVP") == FALSE)
-	{
-		ctrl_avatar_cloth->setEnabled(false);
-	} 
-	else
-	{
-		ctrl_avatar_cloth->setEnabled(true);
-	}
-	
 	/* <FS:LO> remove orphaned code left over from EEP
 	// Vertex Shaders, Global Shader Enable
 	LLRadioGroup* terrain_detail = getChild<LLRadioGroup>("TerrainDetailRadio");   // can be linked with control var
@@ -2247,9 +2220,7 @@ void LLFloaterPreference::refreshEnabledState()
 
 	BOOL enabled = LLFeatureManager::getInstance()->isFeatureAvailable("RenderDeferred") &&
 						((bumpshiny_ctrl && bumpshiny_ctrl->get()) ? TRUE : FALSE) &&
-						((transparent_water_ctrl && transparent_water_ctrl->get()) ? TRUE : FALSE) &&
 						gGLManager.mHasFramebufferObject &&
-						gSavedSettings.getBOOL("RenderAvatarVP") &&
 						(ctrl_wind_light->get()) ? TRUE : FALSE;
 
 	ctrl_deferred->setEnabled(enabled);
@@ -2357,7 +2328,6 @@ void LLAvatarComplexityControls::setIndirectMaxArc()
 void LLFloaterPreference::disableUnavailableSettings()
 {	
 	LLComboBox* ctrl_reflections   = getChild<LLComboBox>("Reflections");
-	LLCheckBoxCtrl* ctrl_avatar_vp     = getChild<LLCheckBoxCtrl>("AvatarVertexProgram");
 	LLCheckBoxCtrl* ctrl_avatar_cloth  = getChild<LLCheckBoxCtrl>("AvatarCloth");
 	LLCheckBoxCtrl* ctrl_wind_light    = getChild<LLCheckBoxCtrl>("WindLightUseAtmosShaders");
 	LLCheckBoxCtrl* ctrl_deferred = getChild<LLCheckBoxCtrl>("UseLightShaders");
@@ -2426,29 +2396,6 @@ void LLFloaterPreference::disableUnavailableSettings()
 		ctrl_reflections->setValue(FALSE);
 	}
 	
-	// disabled av
-	if (!LLFeatureManager::getInstance()->isFeatureAvailable("RenderAvatarVP"))
-	{
-		ctrl_avatar_vp->setEnabled(FALSE);
-		ctrl_avatar_vp->setValue(FALSE);
-		
-		ctrl_avatar_cloth->setEnabled(FALSE);
-		ctrl_avatar_cloth->setValue(FALSE);
-
-		//deferred needs AvatarVP, disable deferred
-		ctrl_shadows->setEnabled(FALSE);
-		ctrl_shadows->setValue(0);
-
-		ctrl_ssao->setEnabled(FALSE);
-		ctrl_ssao->setValue(FALSE);
-
-		ctrl_dof->setEnabled(FALSE);
-		ctrl_dof->setValue(FALSE);
-
-		ctrl_deferred->setEnabled(FALSE);
-		ctrl_deferred->setValue(FALSE);
-	}
-
 	// disabled cloth
 	if (!LLFeatureManager::getInstance()->isFeatureAvailable("RenderAvatarCloth"))
 	{
@@ -2930,13 +2877,13 @@ bool LLFloaterPreference::loadFromFilename(const std::string& filename, std::map
 
     if (!LLXMLNode::parseFile(filename, root, NULL))
     {
-        LL_WARNS() << "Unable to parse file " << filename << LL_ENDL;
+        LL_WARNS("Preferences") << "Unable to parse file " << filename << LL_ENDL;
         return false;
     }
 
     if (!root->hasName("labels"))
     {
-        LL_WARNS() << filename << " is not a valid definition file" << LL_ENDL;
+        LL_WARNS("Preferences") << filename << " is not a valid definition file" << LL_ENDL;
         return false;
     }
 
@@ -2956,7 +2903,7 @@ bool LLFloaterPreference::loadFromFilename(const std::string& filename, std::map
     }
     else
     {
-        LL_WARNS() << filename << " failed to load" << LL_ENDL;
+        LL_WARNS("Preferences") << filename << " failed to load" << LL_ENDL;
         return false;
     }
 
@@ -4214,7 +4161,7 @@ bool LLPanelPreferenceControls::addControlTableColumns(const std::string &filena
     LLScrollListCtrl::Contents contents;
     if (!LLUICtrlFactory::getLayeredXMLNode(filename, xmlNode))
     {
-        LL_WARNS() << "Failed to load " << filename << LL_ENDL;
+        LL_WARNS("Preferences") << "Failed to load " << filename << LL_ENDL;
         return false;
     }
     LLXUIParser parser;
@@ -4241,7 +4188,7 @@ bool LLPanelPreferenceControls::addControlTableRows(const std::string &filename)
     LLScrollListCtrl::Contents contents;
     if (!LLUICtrlFactory::getLayeredXMLNode(filename, xmlNode))
     {
-        LL_WARNS() << "Failed to load " << filename << LL_ENDL;
+        LL_WARNS("Preferences") << "Failed to load " << filename << LL_ENDL;
         return false;
     }
     LLXUIParser parser;
@@ -4347,7 +4294,7 @@ void LLPanelPreferenceControls::populateControlTable()
         {
             // Either unknown mode or MODE_SAVED_SETTINGS
             // It doesn't have UI or actual settings yet
-            LL_WARNS() << "Unimplemented mode" << LL_ENDL;
+            LL_WARNS("Preferences") << "Unimplemented mode" << LL_ENDL;
 
             // Searchable columns were removed, mark searchables for an update
             LLFloaterPreference* instance = LLFloaterReg::findTypedInstance<LLFloaterPreference>("preferences");
@@ -4387,7 +4334,7 @@ void LLPanelPreferenceControls::populateControlTable()
     }
     else
     {
-        LL_WARNS() << "Unimplemented mode" << LL_ENDL;
+        LL_WARNS("Preferences") << "Unimplemented mode" << LL_ENDL;
     }
 
     // explicit update to make sure table is ready for llsearchableui

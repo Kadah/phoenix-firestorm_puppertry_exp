@@ -37,15 +37,15 @@
 #include "llfasttimer.h"
 #include "blockingconcurrentqueue.h"
 #include "llapp.h"
-#include "fstelemetry.h"
+#include "llprofiler.h"
 #include "pipeline.h"
 
 // Additional logging options. These can skew inworld numbers so onyl use for debugging and tracking issues
-#ifdef  FS_HAS_TELEMETRY_SUPPORT
+#ifdef TRACY_ENABLE
 // USAGE_TRACKING - displays overlapping stats that may imply double counting.
 // ATTACHMENT_TRACKING - displays detailed tracking info for Avatar and Attachment. very heavy overhead.
 // #define USAGE_TRACKING
-// #define ATTACHMENT_TRACKING
+#define ATTACHMENT_TRACKING
 #else
 #undef USAGE_TRACKING
 #undef ATTACHMENT_TRACKING
@@ -76,25 +76,27 @@ namespace FSPerfStats
     static constexpr U32 TUNE_AVATARS_ONLY{0};
     static constexpr U32 TUNE_SCENE_AND_AVATARS{1};
 
+    extern F64 cpu_hertz;
+
     extern std::atomic<int64_t> tunedAvatars;
     extern std::atomic<U64> renderAvatarMaxART_ns;
     extern bool belowTargetFPS;
     extern U32 lastGlobalPrefChange;
     extern std::mutex bufferToggleLock;
 
-   	enum class ObjType_t{
-		OT_GENERAL=0, // Also Unknown. Used for n/a type stats such as scenery
-		OT_AVATAR,
-		OT_ATTACHMENT,
-		OT_HUD,
+    enum class ObjType_t{
+        OT_GENERAL=0, // Also Unknown. Used for n/a type stats such as scenery
+        OT_AVATAR,
+        OT_ATTACHMENT,
+        OT_HUD,
         OT_COUNT
-	};
-   	enum class StatType_t{
-		RENDER_GEOMETRY=0,
-		RENDER_SHADOWS,
-		RENDER_HUDS,
-		RENDER_UI,
-		RENDER_COMBINED,
+    };
+    enum class StatType_t{
+        RENDER_GEOMETRY=0,
+        RENDER_SHADOWS,
+        RENDER_HUDS,
+        RENDER_UI,
+        RENDER_COMBINED,
         RENDER_SWAP,
         RENDER_FRAME,
         RENDER_DISPLAY,
@@ -105,8 +107,8 @@ namespace FSPerfStats
         RENDER_FPS,
         RENDER_IDLE,
         RENDER_DONE, // toggle buffer & clearbuffer (see processUpdate for hackery)
-		STATS_COUNT
-	};
+        STATS_COUNT
+    };
 
     struct StatsRecord
     { 
@@ -183,21 +185,20 @@ namespace FSPerfStats
         static inline StatsRecorder& getInstance()
         {
             static StatsRecorder instance;
-            // volatile int dummy{};
             return instance;
         }
         static inline void setFocusAv(const LLUUID& avID){focusAv = avID;};
-        static inline const LLUUID& getFocusAv(){return (focusAv);};
-        static inline void send(StatsRecord&& u){StatsRecorder::getInstance().q.enqueue(u);};
+        static inline const LLUUID& getFocusAv(){return focusAv;};
+        static inline void send(StatsRecord && upd){StatsRecorder::getInstance().q.enqueue(std::move(upd));};
         static void endFrame(){StatsRecorder::getInstance().q.enqueue(StatsRecord{StatType_t::RENDER_DONE, ObjType_t::OT_GENERAL, LLUUID::null, LLUUID::null, 0});};
         static void clearStats(){StatsRecorder::getInstance().q.enqueue(StatsRecord{StatType_t::RENDER_DONE, ObjType_t::OT_GENERAL, LLUUID::null, LLUUID::null, 1});};
 
         static inline void setEnabled(bool on_or_off){collectionEnabled=on_or_off;};
         static inline void enable()     { collectionEnabled=true; };
         static inline void disable()    { collectionEnabled=false; };
-        static inline bool enabled()    { return(collectionEnabled); };
+        static inline bool enabled()    { return collectionEnabled; };
 
-		static inline int getReadBufferIndex() { return (writeBuffer ^ 1); };
+        static inline int getReadBufferIndex() { return (writeBuffer ^ 1); };
         // static inline const StatsTypeMatrix& getCurrentStatsMatrix(){ return statsDoubleBuffer[getReadBufferIndex()];}
         static inline uint64_t get(ObjType_t otype, LLUUID id, StatType_t type)
         {
@@ -227,31 +228,31 @@ namespace FSPerfStats
         using StatsTypeMatrix = std::array<StatsMap, static_cast<size_t>(FSPerfStats::ObjType_t::OT_COUNT)>;
         using StatsSummaryArray = std::array<StatsArray, static_cast<size_t>(FSPerfStats::ObjType_t::OT_COUNT)>;
 
-		static std::atomic<int> writeBuffer;
-		static LLUUID focusAv;
+        static std::atomic<int> writeBuffer;
+        static LLUUID focusAv;
         static std::array<StatsTypeMatrix,2> statsDoubleBuffer;
         static std::array<StatsSummaryArray,2> max;
         static std::array<StatsSummaryArray,2> sum;
         static bool collectionEnabled;
 
 
-        void processUpdate(const StatsRecord& upd)
+        void processUpdate(const StatsRecord& upd) const
         {
-            FSZone;
+            LL_PROFILE_ZONE_SCOPED_CATEGORY_STATS;
             // LL_INFOS("perfstats") << "processing update:" << LL_ENDL;
             // Note: nullptr is used as the key for global stats
-            #ifdef FS_HAS_TELEMETRY_SUPPORT
+            #ifdef TRACY_ENABLE
             static char avstr[36];
             static char obstr[36];
             #endif
 
-            if(upd.statType == StatType_t::RENDER_DONE && upd.objType == ObjType_t::OT_GENERAL && upd.time == 0)
+            if (upd.statType == StatType_t::RENDER_DONE && upd.objType == ObjType_t::OT_GENERAL && upd.time == 0)
             {
                 // LL_INFOS("perfstats") << "End of Frame Toggle Buffer:" << gFrameCount << LL_ENDL;
                 toggleBuffer();
                 return;
             }
-            if(upd.statType == StatType_t::RENDER_DONE && upd.objType == ObjType_t::OT_GENERAL && upd.time == 1)
+            if (upd.statType == StatType_t::RENDER_DONE && upd.objType == ObjType_t::OT_GENERAL && upd.time == 1)
             {
                 // LL_INFOS("perfstats") << "New region - clear buffers:" << gFrameCount << LL_ENDL;
                 clearStatsBuffers();
@@ -264,35 +265,37 @@ namespace FSPerfStats
             auto type {upd.statType};
             auto val {upd.time};
 
-            #ifdef FS_HAS_TELEMETRY_SUPPORT
-            FSZoneText(key.toStringFast(obstr),36);
-            FSZoneText(avKey.toStringFast(avstr),36);
-            FSZoneValue(val);
+            #ifdef TRACY_ENABLE
+            LL_PROFILE_ZONE_TEXT(key.toStringFast(obstr), 36);
+            LL_PROFILE_ZONE_TEXT(avKey.toStringFast(avstr), 36);
+            LL_PROFILE_ZONE_NUM(val);
             #endif
 
-            if(ot == ObjType_t::OT_GENERAL)
+            if (ot == ObjType_t::OT_GENERAL)
             {
                 // LL_INFOS("perfstats") << "General update:" << LL_ENDL;
                 doUpd(key, ot, type,val);
                 return;
             }
 
-            if(ot == ObjType_t::OT_AVATAR)
+            if (ot == ObjType_t::OT_AVATAR)
             {
                 // LL_INFOS("perfstats") << "Avatar update:" << LL_ENDL;
                 doUpd(avKey, ot, type, val);
                 return;
             }
 
-            if(ot == ObjType_t::OT_ATTACHMENT)
+            if (ot == ObjType_t::OT_ATTACHMENT)
             {
-                if( !upd.isRigged && !upd.isHUD )
+                if( !upd.isHUD ) // don't include HUD cost in self.
                 {
+                    LL_PROFILE_ZONE_NAMED("Att as Av")
                     // For all attachments that are not rigged we add them to the avatar (for all avatars) cost.
                     doUpd(avKey, ObjType_t::OT_AVATAR, type, val);
                 }
                 if( avKey == focusAv )
                 {
+                    LL_PROFILE_ZONE_NAMED("Att as Att")
                 // For attachments that are for the focusAv (self for now) we record them for the attachment/complexity view
                     if(upd.isHUD)
                     {
@@ -301,17 +304,16 @@ namespace FSPerfStats
                     // LL_INFOS("perfstats") << "frame: " << gFrameCount << " Attachment update("<< (type==StatType_t::RENDER_GEOMETRY?"GEOMETRY":"SHADOW") << ": " << key.asString() << " = " << val << LL_ENDL;
                     doUpd(key, ot, type, val);
                 }
-                else
-                {
-                    // LL_INFOS("perfstats") << "frame: " << gFrameCount << " non-self Att update("<< (type==StatType_t::RENDER_GEOMETRY?"GEOMETRY":"SHADOW") << ": " << key.asString() << " = " << val << " for av " << avKey.asString() << LL_ENDL;
-                }
+                // else
+                // {
+                //     // LL_INFOS("perfstats") << "frame: " << gFrameCount << " non-self Att update("<< (type==StatType_t::RENDER_GEOMETRY?"GEOMETRY":"SHADOW") << ": " << key.asString() << " = " << val << " for av " << avKey.asString() << LL_ENDL;
+                // }
             }
-
         }
 
         static inline void doUpd(const LLUUID& key, ObjType_t ot, StatType_t type, uint64_t val)
         {
-            FSZone;
+            LL_PROFILE_ZONE_SCOPED_CATEGORY_STATS;
             using ST = StatType_t;
             StatsMap& stm {statsDoubleBuffer[writeBuffer][static_cast<size_t>(ot)]};
             auto& thisAsset = stm[key];
@@ -339,12 +341,13 @@ namespace FSPerfStats
         static void run()
         {
             StatsRecord upd[10];
-            auto& instance {StatsRecorder::getInstance()};
-            FSThreadName( "PerfStats" );
+            auto & instance {StatsRecorder::getInstance()};
+            LL_PROFILER_SET_THREAD_NAME("PerfStats");
 
             while( enabled() && !LLApp::isExiting() )
             {
                 auto count = instance.q.wait_dequeue_bulk_timed(upd, 10, std::chrono::milliseconds(10));
+                LL_PROFILER_THREAD_BEGIN("PerfStats");
                 if(count)
                 {
                     // LL_INFOS("perfstats") << "processing " << count << " updates." << LL_ENDL;
@@ -353,6 +356,7 @@ namespace FSPerfStats
                         instance.processUpdate(upd[i]);
                     }
                 }
+                LL_PROFILER_THREAD_END("PerfStats");
             }
         }
 
@@ -365,9 +369,9 @@ namespace FSPerfStats
 
     };
 
-	template <enum ObjType_t ObjTypeDiscriminator>
+    template <enum ObjType_t ObjTypeDiscriminator>
     class RecordTime
-	{
+    {
 
     private:
         RecordTime(const RecordTime&) = delete;
@@ -380,26 +384,26 @@ namespace FSPerfStats
                     start{LLTrace::BlockTimer::getCPUClockCount64()},
                     stat{type, ObjTypeDiscriminator, std::move(av), std::move(id), 0, isRiggedAtt, isHUDAtt}
         {
-            FSZoneC(tracy::Color::Orange);
+            LL_PROFILE_ZONE_COLOR(tracy::Color::Orange);
         #ifdef USAGE_TRACKING
             if(stat.objType == FSPerfStats::ObjType_t::OT_ATTACHMENT)
             {
-                if(!stat.isRigged && FSPerfStats::inUseAvatar){FSZoneText("OVERLAP AVATAR",14);}
+                if(!stat.isRigged && FSPerfStats::inUseAvatar){LL_PROFILE_ZONE_TEXT("OVERLAP AVATAR",14);}
 
-                FSPlotSq("InUse", (int64_t)FSPerfStats::inUse, (int64_t)FSPerfStats::inUse+1);
+                LL_PROFILE_PLOT_SQ("InUse", (int64_t)FSPerfStats::inUse, (int64_t)FSPerfStats::inUse+1);
                 FSPerfStats::inUse++;
-                FSPlotSq("InUseAttachment", (int64_t)FSPerfStats::inUseAttachment, (int64_t)FSPerfStats::inUseAttachment+1);
+                LL_PROFILE_PLOT_SQ("InUseAttachment", (int64_t)FSPerfStats::inUseAttachment, (int64_t)FSPerfStats::inUseAttachment+1);
                 FSPerfStats::inUseAttachment++;
                 if (stat.isRigged)
                 {
-                    FSPlotSq("InUseAttachmentRigged", (int64_t)FSPerfStats::inUseAttachmentRigged,(int64_t)FSPerfStats::inUseAttachmentRigged+1);
+                    LL_PROFILE_PLOT_SQ("InUseAttachmentRigged", (int64_t)FSPerfStats::inUseAttachmentRigged,(int64_t)FSPerfStats::inUseAttachmentRigged+1);
                     FSPerfStats::inUseAttachmentRigged++;
                 }
                 else
                 {
-                    FSPlotSq("InUseAttachmentUnRigged", (int64_t)FSPerfStats::inUseAttachmentUnRigged,(int64_t)FSPerfStats::inUseAttachmentUnRigged+1);
+                    LL_PROFILE_PLOT_SQ("InUseAttachmentUnRigged", (int64_t)FSPerfStats::inUseAttachmentUnRigged,(int64_t)FSPerfStats::inUseAttachmentUnRigged+1);
                     FSPerfStats::inUseAttachmentUnRigged++;
-                }            
+                }
             }
         #endif
 
@@ -407,13 +411,13 @@ namespace FSPerfStats
 
         template < ObjType_t OD = ObjTypeDiscriminator,
                    std::enable_if_t<OD == ObjType_t::OT_GENERAL> * = nullptr>
-        RecordTime( StatType_t type ):RecordTime<ObjTypeDiscriminator>(LLUUID::null, LLUUID::null, type )
+        explicit RecordTime( StatType_t type ):RecordTime<ObjTypeDiscriminator>(LLUUID::null, LLUUID::null, type )
         {
-            FSZone;
+            LL_PROFILE_ZONE_SCOPED_CATEGORY_STATS;
             #ifdef USAGE_TRACKING
-            FSPlotSq("InUseScene", (int64_t)FSPerfStats::inUseScene, (int64_t)FSPerfStats::inUseScene+1);
+            LL_PROFILE_PLOT_SQ("InUseScene", (int64_t)FSPerfStats::inUseScene, (int64_t)FSPerfStats::inUseScene+1);
             FSPerfStats::inUseScene++;
-            FSPlotSq("InUse", (int64_t)FSPerfStats::inUse, (int64_t)FSPerfStats::inUse+1);
+            LL_PROFILE_PLOT_SQ("InUse", (int64_t)FSPerfStats::inUse, (int64_t)FSPerfStats::inUse+1);
             FSPerfStats::inUse++;
             #endif
         };
@@ -422,16 +426,15 @@ namespace FSPerfStats
                    std::enable_if_t<OD == ObjType_t::OT_AVATAR> * = nullptr>
         RecordTime( const LLUUID & av, StatType_t type ):RecordTime<ObjTypeDiscriminator>(std::move(av), LLUUID::null, type)
         {
-            FSZoneC(tracy::Color::Purple);
+            LL_PROFILE_ZONE_COLOR(tracy::Color::Purple);
 
         #ifdef USAGE_TRACKING
-            if(FSPerfStats::inUseAvatar){FSZoneText("OVERLAP AVATAR",14);}
+            if(FSPerfStats::inUseAvatar){LL_PROFILE_ZONE_TEXT("OVERLAP AVATAR",14);}
 
-            FSPlotSq("InUseAv", (int64_t)FSPerfStats::inUseAvatar, (int64_t)FSPerfStats::inUseAvatar+1);
+            LL_PROFILE_PLOT_SQ("InUseAv", (int64_t)FSPerfStats::inUseAvatar, (int64_t)FSPerfStats::inUseAvatar+1);
             FSPerfStats::inUseAvatar++;
-            FSPlotSq("InUse", (int64_t)FSPerfStats::inUse, (int64_t)FSPerfStats::inUse+1);
+            LL_PROFILE_PLOT_SQ("InUse", (int64_t)FSPerfStats::inUse, (int64_t)FSPerfStats::inUse+1);
             FSPerfStats::inUse++;
-
         #endif
 
         };
@@ -442,36 +445,35 @@ namespace FSPerfStats
             {
                 return;
             }
-            
-            
-            FSZoneC(tracy::Color::Red);
-            
+
+            LL_PROFILE_ZONE_COLOR(tracy::Color::Red);
+
         #ifdef USAGE_TRACKING
-            FSPlotSq("InUse", (int64_t)FSPerfStats::inUse,(int64_t)FSPerfStats::inUse-1);
+            LL_PROFILE_PLOT_SQ("InUse", (int64_t)FSPerfStats::inUse,(int64_t)FSPerfStats::inUse-1);
             --FSPerfStats::inUse;
             if (stat.objType == FSPerfStats::ObjType_t::OT_ATTACHMENT)
             {
-                FSPlotSq("InUseAttachment", (int64_t)FSPerfStats::inUseAttachment,(int64_t)FSPerfStats::inUseAttachment-1);
+                LL_PROFILE_PLOT_SQ("InUseAttachment", (int64_t)FSPerfStats::inUseAttachment,(int64_t)FSPerfStats::inUseAttachment-1);
                 --FSPerfStats::inUseAttachment;
                 if (stat.isRigged)
                 {
-                    FSPlotSq("InUseAttachmentRigged", (int64_t)FSPerfStats::inUseAttachmentRigged,(int64_t)FSPerfStats::inUseAttachmentRigged-1);
+                    LL_PROFILE_PLOT_SQ("InUseAttachmentRigged", (int64_t)FSPerfStats::inUseAttachmentRigged,(int64_t)FSPerfStats::inUseAttachmentRigged-1);
                     --FSPerfStats::inUseAttachmentRigged;
                 }
                 else
                 {
-                    FSPlotSq("InUseAttachmentUnRigged", (int64_t)FSPerfStats::inUseAttachmentUnRigged,(int64_t)FSPerfStats::inUseAttachmentUnRigged-1);
+                    LL_PROFILE_PLOT_SQ("InUseAttachmentUnRigged", (int64_t)FSPerfStats::inUseAttachmentUnRigged,(int64_t)FSPerfStats::inUseAttachmentUnRigged-1);
                     --FSPerfStats::inUseAttachmentUnRigged;
                 }
             }
             if (stat.objType == FSPerfStats::ObjType_t::OT_GENERAL)
             {
-                FSPlotSq("InUseScene", (int64_t)FSPerfStats::inUseScene,(int64_t)FSPerfStats::inUseScene-1);
+                LL_PROFILE_PLOT_SQ("InUseScene", (int64_t)FSPerfStats::inUseScene,(int64_t)FSPerfStats::inUseScene-1);
                 --FSPerfStats::inUseScene;
             }
             if( stat.objType == FSPerfStats::ObjType_t::OT_AVATAR )
             {
-                FSPlotSq("InUseAv", (int64_t)FSPerfStats::inUseAvatar, (int64_t)FSPerfStats::inUseAvatar-1);
+                LL_PROFILE_PLOT_SQ("InUseAv", (int64_t)FSPerfStats::inUseAvatar, (int64_t)FSPerfStats::inUseAvatar-1);
                 --FSPerfStats::inUseAvatar;
             }
         #endif
@@ -480,22 +482,20 @@ namespace FSPerfStats
         #ifdef ATTACHMENT_TRACKING
             static char obstr[36];
             static char avstr[36];
-            FSZoneValue(static_cast<U64>(stat.objType));
-            FSZoneText(stat.avID.toStringFast(avstr), 36);
-            FSZoneText(stat.objID.toStringFast(obstr), 36);
-            FSZoneValue(stat.time);
+            LL_PROFILE_ZONE_NUM(static_cast<U64>(stat.objType));
+            LL_PROFILE_ZONE_TEXT(stat.avID.toStringFast(avstr), 36);
+            LL_PROFILE_ZONE_TEXT(stat.objID.toStringFast(obstr), 36);
+            LL_PROFILE_ZONE_NUM(stat.time);
         #endif
             
             StatsRecorder::send(std::move(stat));
         };
-
-
-	};
+    };
 
     
-    inline double raw_to_ns(U64 raw)    { return (static_cast<double>(raw) * 1000000000.0) / (F64)LLTrace::BlockTimer::countsPerSecond(); };
-    inline double raw_to_us(U64 raw)    { return (static_cast<double>(raw) *    1000000.0) / (F64)LLTrace::BlockTimer::countsPerSecond(); };
-    inline double raw_to_ms(U64 raw)    { return (static_cast<double>(raw) *       1000.0) / (F64)LLTrace::BlockTimer::countsPerSecond(); };
+    inline double raw_to_ns(U64 raw)    { return (static_cast<double>(raw) * 1000000000.0) / FSPerfStats::cpu_hertz; };
+    inline double raw_to_us(U64 raw)    { return (static_cast<double>(raw) *    1000000.0) / FSPerfStats::cpu_hertz; };
+    inline double raw_to_ms(U64 raw)    { return (static_cast<double>(raw) *       1000.0) / FSPerfStats::cpu_hertz; };
 
     using RecordSceneTime = RecordTime<ObjType_t::OT_GENERAL>;
     using RecordAvatarTime = RecordTime<ObjType_t::OT_AVATAR>;
@@ -506,50 +506,56 @@ namespace FSPerfStats
 
 // helper functions
 using RATptr = std::unique_ptr<FSPerfStats::RecordAttachmentTime>;
+using RSTptr = std::unique_ptr<FSPerfStats::RecordSceneTime>;
 
 template <typename T>
 static inline void trackAttachments(const T * vobj, bool isRigged, RATptr* ratPtrp)
 {
-	if( !vobj ){ ratPtrp->reset(); return;};
-	
+    if( !vobj ){ ratPtrp->reset(); return;};
+    
     const T* rootAtt{vobj};
-	if( rootAtt->isAttachment() )
-	{
-	    FSZone;
+    if (rootAtt->isAttachment())
+    {
+        LL_PROFILE_ZONE_SCOPED_CATEGORY_STATS;
 
-		while( !rootAtt->isRootEdit() )
-		{
-			rootAtt = (T*)(rootAtt->getParent());
-		}
+        while( !rootAtt->isRootEdit() )
+        {
+            rootAtt = (T*)(rootAtt->getParent());
+        }
 
         auto avPtr = (T*)(rootAtt->getParent()); 
         if(!avPtr){ratPtrp->reset(); return;}
 
         auto& av = avPtr->getID();
         auto& obj = rootAtt->getAttachmentItemID();
-        if(!*ratPtrp || (*ratPtrp)->stat.objID != obj || (*ratPtrp)->stat.avID != av )
+        if (!*ratPtrp || (*ratPtrp)->stat.objID != obj || (*ratPtrp)->stat.avID != av)
         {
-            #if TRACY_ENABLE && defined(ATTACHMENT_TRACKING)            
-            FSZoneNC( "trackAttachments:new", tracy::Color::Red );
+            #if TRACY_ENABLE && defined(ATTACHMENT_TRACKING)
+            LL_PROFILE_ZONE_NAMED_COLOR( "trackAttachments:new", tracy::Color::Red);
             auto& str = rootAtt->getAttachmentItemName();
-            FSZoneText(str.c_str(), str.size());
-            FSZoneText(isRigged?"Rigged  ":"Unrigged",8);
+            LL_PROFILE_ZONE_TEXT(str.c_str(), str.size());
+            LL_PROFILE_ZONE_TEXT(isRigged ? "Rigged" : "Unrigged", 8);
             static char avStr[36];
             av.toStringFast(avStr);
             static char obStr[4];
             obj.toShortString(obStr);
-            FSZoneText( avStr, 36);
-            FSZoneText( obStr, 4);
+            LL_PROFILE_ZONE_TEXT( avStr, 36);
+            LL_PROFILE_ZONE_TEXT( obStr, 4);
             #endif
-            if(*ratPtrp){ratPtrp->reset();}; // deliberately reset to ensure destruction before construction of replacement.
-            *ratPtrp = std::make_unique<FSPerfStats::RecordAttachmentTime>( av, 
-                                                                            obj,
-                                                                            ( (LLPipeline::sShadowRender)?FSPerfStats::StatType_t::RENDER_SHADOWS : FSPerfStats::StatType_t::RENDER_GEOMETRY ), 
-                                                                            isRigged, 
-                                                                            rootAtt->isHUDAttachment());
+            if (*ratPtrp)
+            {
+                // deliberately reset to ensure destruction before construction of replacement.
+                ratPtrp->reset();
+            };
+            *ratPtrp = std::make_unique<FSPerfStats::RecordAttachmentTime>( 
+                av, 
+                obj,
+                ( LLPipeline::sShadowRender?FSPerfStats::StatType_t::RENDER_SHADOWS : FSPerfStats::StatType_t::RENDER_GEOMETRY ), 
+                isRigged, 
+                rootAtt->isHUDAttachment());
         }
-	}
-	return;
+    }
+    return;
 };
 
 #endif
