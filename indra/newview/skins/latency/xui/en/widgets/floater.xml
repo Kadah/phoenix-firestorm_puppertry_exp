@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes" ?>
 <!-- See also settings.xml UIFloater* settings for configuration -->
 <floater
- name="floater" 
+ name="floater"
+ layout="topleft"
  bg_opaque_image_overlay="White"
  bg_opaque_image="floater_background_header"
  bg_alpha_image="floater_background"
