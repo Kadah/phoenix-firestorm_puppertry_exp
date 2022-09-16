@@ -16,7 +16,7 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  * 
- * You should have received a copy of the GNU Lesser General Public
+ * You should have received a copy of the GNU Lesser General PublicatarActions::pay(getAvat
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  * 
@@ -50,6 +50,7 @@
 #include "llspeakers.h" //for LLIMSpeakerMgr
 #include "lltrans.h"
 #include "llfloaterreg.h"
+#include "llfloaterreporter.h"
 #include "llfloatersidepanelcontainer.h"
 #include "llstylemap.h"
 #include "llslurl.h"
@@ -141,6 +142,7 @@ public:
 		mType(CHAT_TYPE_NORMAL), // FS:LO FIRE-1439 - Clickable avatar names on local chat radar crossing reports
 		mFrom(),
 		mSessionID(),
+		mCreationTime(time_corrected()),
 		mMinUserNameWidth(0),
 		mUserNameFont(NULL),
 		mUserNameTextBox(NULL),
@@ -456,6 +458,48 @@ public:
 		{
 			LLUrlAction::copyURLToClipboard(LLSLURL("agent", getAvatarId(), "about").getSLURLString());
 		}
+		else if (param == "report_abuse")
+		{
+			std::string time_string;
+			if (mTime > 0) // have frame time
+			{
+				time_t current_time = time_corrected();
+				time_t message_time = current_time - LLFrameTimer::getElapsedSeconds() + mTime;
+
+				time_string = "[" + LLTrans::getString("TimeMonth") + "]/["
+					+ LLTrans::getString("TimeDay") + "]/["
+					+ LLTrans::getString("TimeYear") + "] ["
+					+ LLTrans::getString("TimeHour") + "]:["
+					+ LLTrans::getString("TimeMin") + "]";
+
+				LLSD substitution;
+
+				substitution["datetime"] = (S32)message_time;
+				LLStringUtil::format(time_string, substitution);
+			}
+			else
+			{
+				// From history. This might be empty or not full.
+				// See LLChatLogParser::parse
+				time_string = getChild<LLTextBox>("time_box")->getValue().asString();
+
+				// Just add current date if not full.
+				// Should be fine since both times are supposed to be stl
+				if (!time_string.empty() && time_string.size() < 7)
+				{
+					time_string = "[" + LLTrans::getString("TimeMonth") + "]/["
+						+ LLTrans::getString("TimeDay") + "]/["
+						+ LLTrans::getString("TimeYear") + "] " + time_string;
+
+					LLSD substitution;
+					// To avoid adding today's date to yesterday's timestamp,
+					// use creation time instead of current time
+					substitution["datetime"] = (S32)mCreationTime;
+					LLStringUtil::format(time_string, substitution);
+				}
+			}
+			LLFloaterReporter::showFromChat(mAvatarID, mFrom, time_string, mText);
+		}
 		else if (param == "block_unblock")
 		{
 			LLAvatarActions::toggleMute(getAvatarId(), LLMute::flagVoiceChat);
@@ -541,7 +585,11 @@ public:
 		{
 			return canModerate(userdata);
 		}
-// [RLVa:KB] - @pay
+		else if (param == "report_abuse")
+		{
+			return gAgentID != mAvatarID;
+		}
+		// [RLVa:KB] - @pay
 		else if (param == "can_pay")
 		{
 			return RlvActions::canPayAvatar(getAvatarId());
@@ -679,6 +727,12 @@ public:
 		mSourceType = chat.mSourceType;
 		mType = chat.mChatType; // FS:LO FIRE-1439 - Clickable avatar names on local chat radar crossing reports
 		mNameStyleParams = style_params;
+
+		// To be able to report a message, we need a copy of it's text
+		// and it's easier to store text directly than trying to get
+		// it from a lltextsegment or chat's mEditor
+		mText = chat.mText;
+		mTime = chat.mTime;
 
 		//*TODO overly defensive thing, source type should be maintained out there
 		if((chat.mFromID.isNull() && chat.mFromName.empty()) || (chat.mFromName == SYSTEM_FROM && chat.mFromID.isNull()))
@@ -1161,7 +1215,10 @@ protected:
 	EChatType			mType; // FS:LO FIRE-1439 - Clickable avatar names on local chat radar crossing reports
 	std::string			mFrom;
 	LLUUID				mSessionID;
-// [RLVa:KB] - Checked: 2010-04-22 (RLVa-1.2.2a) | Added: RLVa-1.2.0f
+	std::string			mText;
+	F64					mTime; // IM's frame time
+	time_t				mCreationTime; // Views's time
+	// [RLVa:KB] - Checked: 2010-04-22 (RLVa-1.2.2a) | Added: RLVa-1.2.0f
 	bool				mShowContextMenu;
 	bool				mShowInfoCtrl;
 // [/RLVa:KB]
