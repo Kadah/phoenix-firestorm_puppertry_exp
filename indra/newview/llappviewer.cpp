@@ -3485,7 +3485,7 @@ bool LLAppViewer::initConfiguration()
 	gLastRunVersion = gSavedSettings.getString("LastRunVersion");
 
 	loadColorSettings();
-    
+
     //<FS:KC> One time fix for Latency
     if ((gLastRunVersion != LLVersionInfo::getInstance()->getChannelAndVersion()) && (gSavedSettings.getString("SkinCurrent") == "latency") && !gSavedSettings.getBOOL("FSLatencyOneTimeFixRun"))
     {
