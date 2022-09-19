@@ -55,6 +55,8 @@ LLResizeHandle::LLResizeHandle(const LLResizeHandle::Params& p)
 	mImage( NULL ),
 	mMinWidth( p.min_width ),
 	mMinHeight( p.min_height ),
+	mMaxWidth( p.max_width ),		//<KC: add support for max size>
+	mMaxHeight( p.max_height ),		//<KC: add support for max size>
 	mCorner( p.corner )
 {
 	if( RIGHT_BOTTOM == mCorner)
@@ -171,6 +173,8 @@ BOOL LLResizeHandle::handleHover(S32 x, S32 y, MASK mask)
 				break;
 			}
 
+//<KC: add support for max size>
+/*
 			S32 new_width = orig_rect.getWidth() + x_multiple * delta_x;
 			if( new_width < mMinWidth )
 			{
@@ -184,6 +188,12 @@ BOOL LLResizeHandle::handleHover(S32 x, S32 y, MASK mask)
 				new_height = mMinHeight;
 				delta_y = y_multiple * (mMinHeight - orig_rect.getHeight());
 			}
+*/
+			S32 new_width = llclamp(orig_rect.getWidth() + x_multiple * delta_x, mMinWidth, mMaxWidth);
+			delta_x = x_multiple * (new_width - orig_rect.getWidth());
+			S32 new_height = llclamp(orig_rect.getHeight() + y_multiple * delta_y, mMinHeight, mMaxHeight);
+			delta_y = y_multiple * (new_height - orig_rect.getHeight());
+//</KC: add support for max size>
 
 			switch( mCorner )
 			{

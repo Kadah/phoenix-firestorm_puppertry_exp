@@ -80,8 +80,16 @@ public:
 		Optional<LLUIImage*>	bg_opaque_image,
 								bg_alpha_image;
 
+//<KC: add support for max size>
+/*
 		Optional<S32>			min_width,
 								min_height;
+*/
+		Optional<S32>			min_width,
+								min_height,
+								max_width,
+								max_height;
+//</KC: add support for max size>
 
 		Optional<std::string>	filename;
 		Optional<std::string>	class_name;

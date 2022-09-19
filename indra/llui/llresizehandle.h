@@ -42,6 +42,8 @@ public:
 		Mandatory<ECorner>	corner;
 		Optional<S32>		min_width;
 		Optional<S32>		min_height;
+		Optional<S32>		max_width;  //<KC: add support for max size>
+		Optional<S32>		max_height;  //<KC: add support for max size>
 		Params();
 	};
 
@@ -54,7 +56,12 @@ public:
 	virtual BOOL	handleMouseDown(S32 x, S32 y, MASK mask);
 	virtual BOOL	handleMouseUp(S32 x, S32 y, MASK mask);
 
-	void			setResizeLimits( S32 min_width, S32 min_height ) { mMinWidth = min_width; mMinHeight = min_height; }
+//<KC: add support for max size>
+//	void			setResizeLimits( S32 min_width, S32 min_height ) { mMinWidth = min_width; mMinHeight = min_height; }
+	void			setResizeLimits( S32 min_width, S32 min_height, S32 max_width = S32_MAX,  S32 max_height = S32_MAX ) {
+													mMinWidth = min_width; mMinHeight = min_height;
+													mMaxWidth = max_width; mMaxHeight = max_height; }
+//</KC: add support for max size>
 	
 private:
 	BOOL			pointInHandle( S32 x, S32 y );
@@ -67,6 +74,8 @@ private:
 	LLPointer<LLUIImage>	mImage;
 	S32				mMinWidth;
 	S32				mMinHeight;
+	S32				mMaxWidth;  //<KC: add support for max size>
+	S32				mMaxHeight;  //<KC: add support for max size>
 	const ECorner	mCorner;
 };
 
