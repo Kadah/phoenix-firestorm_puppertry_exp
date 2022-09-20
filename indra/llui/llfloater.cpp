@@ -3203,20 +3203,11 @@ void LLFloaterView::adjustToFitScreen(LLFloater* floater, BOOL allow_partial_out
 		S32 old_height = view_rect.getHeight();
 		S32 min_width;
 		S32 min_height;
-		S32 max_width;		//<KC: add support for max size>
-		S32 max_height;		//<KC: add support for max size>
-		floater->getResizeLimits( &min_width, &min_height, &max_width, &max_height );
+		floater->getResizeLimits( &min_width, &min_height );
 
-//<KC: add support for max size>
-/*
 		// Make sure floater isn't already smaller than its min height/width?
 		S32 new_width = llmax( min_width, old_width );
 		S32 new_height = llmax( min_height, old_height);
-*/
-		// Make sure floater isn't already smaller/bigger than its min/max height/width?
-		S32 new_width = llclamp( old_width, min_width, max_width );
-		S32 new_height = llclamp( old_height, min_height, max_height );
-//</KC: add support for max size>
 
 		if((new_width > screen_width) || (new_height > screen_height))
 		{
