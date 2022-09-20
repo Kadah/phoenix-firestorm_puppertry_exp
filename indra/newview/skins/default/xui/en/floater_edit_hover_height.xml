@@ -6,7 +6,8 @@
  can_close="true"
  can_resize="true"
  min_height="75"
- min_width="515"
+ max_height="75"
+ min_width="250"
  height="75"
  layout="topleft"
  name="HoverHeight"
@@ -19,14 +20,14 @@
       <slider
      enabled="false"
      decimal_digits="3"
-     follows="top|left"
+     follows="top|left|right"
      height="15"
      increment="0.001"
      initial_value="0.0"
      label="Height"
      label_width="60"
      left="10"
-     width="501"
+     width="495"
      layout="topleft"
      name="HoverHeightSlider"
      top="25"
@@ -35,11 +36,21 @@
     </slider>
   <check_box
      control_name="HoverHeightAffectsCamera"
-     follows="all"
+     follows="top|left"
      height="15"
-     label="Affect Camera view"
+     label="Affect Camera View"
      layout="topleft"
      name="BindCameraCheck"
      top_pad="10"
      width="237"/>
+    <button
+     enabled="false"
+     follows="top|right"
+     height="20"
+     label="Zero"
+     layout="topleft"
+     right="-10"
+     name="ZeroButton"
+     top_delta="-4"
+     width="90" />
 </floater>

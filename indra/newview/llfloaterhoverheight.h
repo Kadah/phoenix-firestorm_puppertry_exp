@@ -39,6 +39,8 @@ public:
 
 	void onFinalCommit();
 
+	void onZeroButton();			// <KC: Add zero button to hover height floater>
+
 	static void syncFromPreferenceSetting(void *user_data, bool update_offset = true);
 
 	void onRegionChanged();

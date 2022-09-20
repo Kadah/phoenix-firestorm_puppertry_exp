@@ -72,6 +72,11 @@ BOOL LLFloaterHoverHeight::postBuild()
 	sldrCtrl->setSliderEditorCommitCallback(boost::bind(&LLFloaterHoverHeight::onFinalCommit,this));
 	childSetCommitCallback("HoverHeightSlider", &LLFloaterHoverHeight::onSliderMoved, NULL);
 
+	// <KC: Add zero button to hover height floater>
+	LLButton* btnZero = getChild<LLButton>( "ZeroButton");
+	btnZero->setClickedCallback(boost::bind(&LLFloaterHoverHeight::onZeroButton, this));
+	// </KC: Add zero button to hover height floater>
+
 	// Initialize slider from pref setting.
 	syncFromPreferenceSetting(this);
 	// Update slider on future pref changes.
@@ -142,6 +147,14 @@ void LLFloaterHoverHeight::onFinalCommit()
 	gSavedPerAccountSettings.setF32("AvatarHoverOffsetZ",value);
 }
 
+// <KC: Add zero button to hover height floater>
+void LLFloaterHoverHeight::onZeroButton()
+{
+	gSavedPerAccountSettings.setF32("AvatarHoverOffsetZ",0.0);
+	syncFromPreferenceSetting(this);
+}
+// </KC: Add zero button to hover height floater>
+
 void LLFloaterHoverHeight::onRegionChanged()
 {
 	LLViewerRegion *region = gAgent.getRegion();
@@ -175,6 +188,10 @@ void LLFloaterHoverHeight::updateEditEnabled()
 	// </FS:Ansariel>
 	LLSliderCtrl* sldrCtrl = getChild<LLSliderCtrl>("HoverHeightSlider");
 	sldrCtrl->setEnabled(enabled);
+	// <KC: Add zero button to hover height floater>
+	LLButton* btnZero = getChild<LLButton>( "ZeroButton");
+	btnZero->setEnabled(enabled);
+	// </KC: Add zero button to hover height floater>
 	if (enabled)
 	{
 		syncFromPreferenceSetting(this);
