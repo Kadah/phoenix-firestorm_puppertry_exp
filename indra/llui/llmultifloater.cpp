@@ -43,9 +43,7 @@ LLMultiFloater::LLMultiFloater(const LLSD& key, const LLFloater::Params& params)
 	  mTabPos(LLTabContainer::TOP),
 	  mAutoResize(TRUE),
 	  mOrigMinWidth(params.min_width),
-	  mOrigMinHeight(params.min_height),
-	  mOrigMaxWidth(params.max_height),		//<KC: add support for max size>
-	  mOrigMaxHeight(params.max_height)	//<KC: add support for max size>
+	  mOrigMinHeight(params.min_height)
 {
 }
 
@@ -514,10 +512,7 @@ BOOL LLMultiFloater::postBuild()
 	mCloseSignal.connect(boost::bind(&LLMultiFloater::closeAllFloaters, this));
 		
 	// remember any original xml minimum size
-//<KC: add support for max size>	
-//	getResizeLimits(&mOrigMinWidth, &mOrigMinHeight);
-	getResizeLimits( &mOrigMinWidth, &mOrigMinHeight, &mOrigMaxWidth, &mOrigMaxHeight );
-//</KC: add support for max size>
+	getResizeLimits(&mOrigMinWidth, &mOrigMinHeight);
 
 	if (mTabContainer)
 	{
@@ -538,11 +533,7 @@ void LLMultiFloater::updateResizeLimits()
 	// initialize minimum size constraint to the original xml values.
 	S32 new_min_width = mOrigMinWidth;
 	S32 new_min_height = mOrigMinHeight;
-	S32 new_max_width = mOrigMaxWidth;		//<KC: add support for max size>
-	S32 new_max_height = mOrigMaxHeight;	//<KC: add support for max size>
 
-//<KC: add support for max size>
-/*
 	computeResizeLimits(new_min_width, new_min_height);
 
 	setResizeLimits(new_min_width, new_min_height);
@@ -550,15 +541,6 @@ void LLMultiFloater::updateResizeLimits()
 	S32 cur_height = getRect().getHeight();
 	S32 new_width = llmax(getRect().getWidth(), new_min_width);
 	S32 new_height = llmax(getRect().getHeight(), new_min_height);
-*/
-	computeResizeLimits( new_min_width, new_min_height, new_max_width, new_max_height );
-
-	setResizeLimits( new_min_width, new_min_height, new_max_width, new_max_height );
-
-	S32 cur_height = getRect().getHeight();
-	S32 new_width = llclamp( getRect().getWidth(), new_min_width, new_max_width );
-	S32 new_height = llclamp( getRect().getHeight(), new_min_height, new_max_height );
-//</KC: add support for max size>
 
 	if (isMinimized())
 	{
@@ -580,8 +562,6 @@ void LLMultiFloater::updateResizeLimits()
 	}
 }
 
-//<KC: add support for max size>
-/*
 void LLMultiFloater::computeResizeLimits(S32& new_min_width, S32& new_min_height)
 {
 	static LLUICachedControl<S32> tabcntr_close_btn_size ("UITabCntrCloseBtnSize", 0);
@@ -600,30 +580,6 @@ void LLMultiFloater::computeResizeLimits(S32& new_min_width, S32& new_min_height
 		}
 	}
 }
-*/
-void LLMultiFloater::computeResizeLimits(S32& new_min_width, S32& new_min_height, S32& new_max_width, S32& new_max_height)
-{
-	static LLUICachedControl<S32> tabcntr_close_btn_size ("UITabCntrCloseBtnSize", 0);
-	const LLFloater::Params& default_params = LLFloater::getDefaultParams();
-	S32 floater_header_size = default_params.header_height;
-	S32 tabcntr_header_height = LLPANEL_BORDER_WIDTH + tabcntr_close_btn_size;
-
-	// possibly increase minimum size constraint due to children's minimums.
-	for (S32 tab_idx = 0; tab_idx < mTabContainer->getTabCount(); ++tab_idx)
-	{
-		LLFloater* floaterp = (LLFloater*)mTabContainer->getPanelByIndex(tab_idx);
-		if (floaterp)
-		{
-			new_min_width = llmax(new_min_width, floaterp->getMinWidth() + LLPANEL_BORDER_WIDTH * 2);
-			new_min_height = llmax(new_min_height, floaterp->getMinHeight() + floater_header_size + tabcntr_header_height);
-			
-			//<KC: add support for max size> not sure if this is correct
-			new_max_width = llmax(new_max_width, floaterp->getMaxWidth() + LLPANEL_BORDER_WIDTH * 2);
-			new_max_height = llmax(new_max_height, floaterp->getMaxHeight() + floater_header_size + tabcntr_header_height);
-		}
-	}
-}
-//</KC: add support for max size>
 
 // <FS:Ansariel> CTRL-W doesn't work with multifloaters
 void LLMultiFloater::closeDockedFloater()
