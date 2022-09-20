@@ -953,7 +953,7 @@ void LLFloater::setResizeLimits( S32 min_width, S32 min_height, S32 max_width, S
 	// legacy_header_height to correct their legacy layout should have no effect by this. - K
 	S32 header_stretch = (mHeaderHeight - mLegacyHeaderHeight);
 	min_height += header_stretch;
-	max_height += header_stretch;
+	if (max_height < S32_MAX) max_height += header_stretch;
 
 	mMinWidth = min_width;
 	mMinHeight = min_height;
