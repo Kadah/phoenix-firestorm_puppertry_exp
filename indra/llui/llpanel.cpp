@@ -80,6 +80,8 @@ LLPanel::Params::Params()
 	bg_alpha_image("bg_alpha_image"),
 	min_width("min_width", 100),
 	min_height("min_height", 100),
+	max_width("max_width", S32_MAX),  //<KC: add support for max size>
+	max_height("max_height", S32_MAX),  //<KC: add support for max size>
 	strings("string"),
 	filename("filename"),
 	class_name("class"),

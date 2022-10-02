@@ -207,7 +207,7 @@ background_visible="false"
 			name="button_row_ls"
 			left_pad="0"
 			orientation="horizontal"
-			top_delta="0"
+			top_delta="2"
 			width="445">
 				<layout_panel
 				follows="bottom|left|right"

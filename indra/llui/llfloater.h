@@ -290,8 +290,17 @@ public:
 	void			setCanSnooze(BOOL can_snooze);		// <FS:Ansariel> FIRE-11724: Snooze group chat
 	void			setHost(LLMultiFloater* host);
 	BOOL			isResizable() const				{ return mResizable; }
+//<KC: add support for max size>
+/*
 	void			setResizeLimits( S32 min_width, S32 min_height );
 	void			getResizeLimits( S32* min_width, S32* min_height ) { *min_width = mMinWidth; *min_height = mMinHeight; }
+*/
+	void			setResizeLimits( S32 min_width, S32 min_height, S32 max_width = S32_MAX, S32 max_height = S32_MAX );
+	void			getResizeLimits( S32* min_width, S32* min_height ) { *min_width = mMinWidth; *min_height = mMinHeight; }
+	void			getResizeLimits( S32* min_width, S32* min_height, S32* max_width, S32* max_height ) {
+																			*min_width = mMinWidth; *min_height = mMinHeight;
+																			*max_width = mMaxWidth; *max_height = mMaxHeight; }
+//</KC: add support for max size>
 
 	static std::string		getControlName(const std::string& name, const LLSD& key);
 	static LLControlGroup*	getControlGroup();
@@ -301,6 +310,8 @@ public:
 	bool			isDragOnLeft() const{ return mDragOnLeft; }
 	S32				getMinWidth() const{ return mMinWidth; }
 	S32				getMinHeight() const{ return mMinHeight; }
+	S32				getMaxWidth() const{ return mMaxWidth; }		//<KC: add support for max size>
+	S32				getMaxHeight() const{ return mMaxHeight; }	//<KC: add support for max size>
 	S32				getHeaderHeight() const { return mHeaderHeight; }
 
 	virtual BOOL	handleMouseDown(S32 x, S32 y, MASK mask);
@@ -519,6 +530,8 @@ private:
 	
 	S32				mMinWidth;
 	S32				mMinHeight;
+	S32				mMaxWidth;				//<KC: add support for max size>
+	S32				mMaxHeight;				//<KC: add support for max size>
 	S32				mHeaderHeight;		// height in pixels of header for title, drag bar
 	S32				mLegacyHeaderHeight;// HACK see initFloaterXML()
 	

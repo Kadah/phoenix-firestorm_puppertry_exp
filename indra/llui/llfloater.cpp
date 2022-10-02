@@ -274,6 +274,8 @@ LLFloater::LLFloater(const LLSD& key, const LLFloater::Params& p)
 	mPositioning(p.positioning),
 	mMinWidth(p.min_width),
 	mMinHeight(p.min_height),
+	mMaxWidth(p.max_width),			//<KC: add support for max size>
+	mMaxHeight(p.max_height),		//<KC: add support for max size>
 	mHeaderHeight(p.header_height),
 	mLegacyHeaderHeight(p.legacy_header_height),
 	mDefaultRectForGroup(true),
@@ -436,12 +438,14 @@ void LLFloater::addResizeCtrls()
 	p.name("resizebar_left");
 	p.resizing_view(this);
 	p.min_size(mMinWidth);
+	p.max_size(mMaxWidth);  //<KC: add support for max size>
 	p.side(LLResizeBar::LEFT);
 	mResizeBar[LLResizeBar::LEFT] = LLUICtrlFactory::create<LLResizeBar>(p);
 	addChild( mResizeBar[LLResizeBar::LEFT] );
 
 	p.name("resizebar_top");
 	p.min_size(mMinHeight);
+	p.max_size(mMaxHeight);  //<KC: add support for max size>
 	p.side(LLResizeBar::TOP);
 
 	mResizeBar[LLResizeBar::TOP] = LLUICtrlFactory::create<LLResizeBar>(p);
@@ -449,12 +453,14 @@ void LLFloater::addResizeCtrls()
 
 	p.name("resizebar_right");
 	p.min_size(mMinWidth);
+	p.max_size(mMaxWidth);  //<KC: add support for max size>
 	p.side(LLResizeBar::RIGHT);	
 	mResizeBar[LLResizeBar::RIGHT] = LLUICtrlFactory::create<LLResizeBar>(p);
 	addChild( mResizeBar[LLResizeBar::RIGHT] );
 
 	p.name("resizebar_bottom");
 	p.min_size(mMinHeight);
+	p.max_size(mMaxHeight);  //<KC: add support for max size>
 	p.side(LLResizeBar::BOTTOM);
 	mResizeBar[LLResizeBar::BOTTOM] = LLUICtrlFactory::create<LLResizeBar>(p);
 	addChild( mResizeBar[LLResizeBar::BOTTOM] );
@@ -466,6 +472,8 @@ void LLFloater::addResizeCtrls()
 	handle_p.mouse_opaque(false);
 	handle_p.min_width(mMinWidth);
 	handle_p.min_height(mMinHeight);
+	handle_p.max_width(mMaxWidth);  //<KC: add support for max size>
+	handle_p.max_height(mMaxHeight);  //<KC: add support for max size>
 	handle_p.corner(LLResizeHandle::RIGHT_BOTTOM);
 	mResizeHandle[0] = LLUICtrlFactory::create<LLResizeHandle>(handle_p);
 	addChild(mResizeHandle[0]);
@@ -830,17 +838,13 @@ void LLFloater::closeFloater(bool app_quitting)
 		for(handle_set_iter_t dependent_it = mDependents.begin();
 			dependent_it != mDependents.end(); )
 		{
-			
 			LLFloater* floaterp = dependent_it->get();
-			if (floaterp)
-			{
-				++dependent_it;
-				floaterp->closeFloater(app_quitting);
-			}
-			else
-			{
-				mDependents.erase(dependent_it++);
-			}
+            dependent_it = mDependents.erase(dependent_it);
+            if (floaterp)
+            {
+                floaterp->mDependeeHandle = LLHandle<LLFloater>();
+                floaterp->closeFloater(app_quitting);
+            }
 		}
 		
 		cleanupHandles();
@@ -911,7 +915,8 @@ void LLFloater::releaseFocus()
 	}
 }
 
-
+//<KC: add support for max size>
+/*
 void LLFloater::setResizeLimits( S32 min_width, S32 min_height )
 {
 	mMinWidth = min_width;
@@ -936,6 +941,45 @@ void LLFloater::setResizeLimits( S32 min_width, S32 min_height )
 		}
 	}
 }
+*/
+void LLFloater::setResizeLimits( S32 min_width, S32 min_height, S32 max_width, S32 max_height )
+{
+	// HACK: Another hack to deal with an old "temporary" hack
+	// See comment on header_stretch in initFloaterXML for more details on the old hack
+	// The hack to enlarge the floater for the header size change from legacy Viewer2
+	// results in unwanted resizing when min_height = max_height because those values do not
+	// account for the hack adding additional height. There may be other issues that would cause.
+	// To account for the stretch, add it to the height limits. Any "new" floaters that do not rely on
+	// legacy_header_height to correct their legacy layout should have no effect by this. - K
+	S32 header_stretch = (mHeaderHeight - mLegacyHeaderHeight);
+	min_height += header_stretch;
+	if (max_height < S32_MAX) max_height += header_stretch;
+
+	mMinWidth = min_width;
+	mMinHeight = min_height;
+	mMaxWidth = max_width;
+	mMaxHeight = max_height;
+	
+	for( S32 i = 0; i < 4; i++ )
+	{
+		if( mResizeBar[i] )
+		{
+			if (i == LLResizeBar::LEFT || i == LLResizeBar::RIGHT)
+			{
+				mResizeBar[i]->setResizeLimits( min_width, max_width );
+			}
+			else
+			{
+				mResizeBar[i]->setResizeLimits( min_height, max_height );
+			}
+		}
+		if( mResizeHandle[i] )
+		{
+			mResizeHandle[i]->setResizeLimits( min_width, min_height, max_width, max_height );
+		}
+	}
+}
+//</KC: add support for max size>
 
 
 void LLFloater::center()
@@ -989,7 +1033,10 @@ bool LLFloater::applyRectControl()
 			const LLRect& rect = getControlGroup()->getRect(mRectControl);
 			if (rect.notEmpty() && mResizable)
 			{
-				reshape(llmax(mMinWidth, rect.getWidth()), llmax(mMinHeight, rect.getHeight()));
+//<KC: add support for max size>
+//				reshape(llmax(mMinWidth, rect.getWidth()), llmax(mMinHeight, rect.getHeight()));
+				reshape(llclamp(rect.getWidth(), mMinWidth, mMaxWidth), llclamp(rect.getHeight(), mMinHeight, mMaxHeight));
+//</KC: add support for max size>
 			}
 		}
 		// </FS:Ansariel>
@@ -1015,7 +1062,10 @@ bool LLFloater::applyRectControl()
 
 				if (mResizable)
 				{
-					reshape(llmax(mMinWidth, rect.getWidth()), llmax(mMinHeight, rect.getHeight()));
+//<KC: add support for max size>
+//					reshape(llmax(mMinWidth, rect.getWidth()), llmax(mMinHeight, rect.getHeight()));
+					reshape(llclamp(rect.getWidth(), mMinWidth, mMaxWidth), llclamp(rect.getHeight(), mMinHeight, mMaxHeight));
+//</KC: add support for max size>
 				}
 				mPositioning = LLFloaterEnums::POSITIONING_RELATIVE;
 				LLRect screen_rect = calcScreenRect();
@@ -1531,7 +1581,7 @@ void LLFloater::cleanupHandles()
 		LLFloater* floaterp = dependent_it->get();
 		if (!floaterp)
 		{
-			mDependents.erase(dependent_it++);
+            dependent_it = mDependents.erase(dependent_it);
 		}
 		else
 		{
@@ -3556,6 +3606,8 @@ void LLFloater::setupParamsForExport(Params& p, LLView* parent)
 	{
 		p.min_height.setProvided(false);
 		p.min_width.setProvided(false);
+		p.max_height.setProvided(false);		//<KC: add support for max size>
+		p.max_width.setProvided(false);		//<KC: add support for max size>
 	}
 }
 
@@ -3582,11 +3634,14 @@ void LLFloater::initFromParams(const LLFloater::Params& p)
 	setCanClose(p.can_close);
 	setCanDock(p.can_dock);
 	setCanResize(p.can_resize);
+/*<KC: add support for max size> Needs to be called later
 	setResizeLimits(p.min_width, p.min_height);
+</KC: add support for max size>*/
 	
 	mDragOnLeft = p.can_drag_on_left;
 	mHeaderHeight = p.header_height;
 	mLegacyHeaderHeight = p.legacy_header_height;
+	setResizeLimits( p.min_width, p.min_height, p.max_width, p.max_height );		//<KC: add support for max size>
 	mSingleInstance = p.single_instance;
 	mReuseInstance = p.reuse_instance.isProvided() ? p.reuse_instance : p.single_instance;
 
@@ -3861,7 +3916,12 @@ void LLFloater::stackWith(LLFloater& other)
 	const LLRect& rect = getControlGroup()->getRect(mRectControl);
 	if (rect.notEmpty() && !mDefaultRectForGroup && mResizable)
 	{
-		next_rect.setLeftTopAndSize(next_rect.mLeft, next_rect.mTop, llmax(mMinWidth, rect.getWidth()), llmax(mMinHeight, rect.getHeight()));
+//<KC: add support for max size>
+//		next_rect.setLeftTopAndSize(next_rect.mLeft, next_rect.mTop, llmax(mMinWidth, rect.getWidth()), llmax(mMinHeight, rect.getHeight()));
+		next_rect.setLeftTopAndSize(next_rect.mLeft, next_rect.mTop,
+									llclamp(rect.getWidth(), mMinWidth, mMaxWidth),
+									llclamp(rect.getHeight(), mMinHeight, mMaxHeight));
+//</KC: add support for max size>
 	}
 	else
 	{
