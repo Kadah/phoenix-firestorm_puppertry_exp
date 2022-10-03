@@ -4698,8 +4698,7 @@ void process_kill_object(LLMessageSystem *mesgsys, void **user_data)
 				{
 					LLColor4 color(0.f,1.f,0.f,1.f);
 					gPipeline.addDebugBlip(objectp->getPositionAgent(), color);
-                    LL_DEBUGS("MessageBlip") << "Kill blip for local " << local_id << " at " << objectp->getPositionAgent() << LL_ENDL;
-
+					LL_DEBUGS("MessageBlip") << "Kill blip for local " << local_id << " at " << objectp->getPositionAgent() << LL_ENDL;
 				}
 
 				// Do the kill
@@ -5172,6 +5171,10 @@ static void  handle_puppetry_data(LLMessageSystem * mesgsys, LLVOAvatar * avatar
             {
                 puppet_motion->unpackEvents(mesgsys, i);
             }
+        }
+        if (!puppet_motion->isActive() && puppet_motion->needsUpdate())
+        {
+            avatarp->startMotion(ANIM_AGENT_PUPPET_MOTION);
         }
     }
 }

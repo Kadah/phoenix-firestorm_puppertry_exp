@@ -39,9 +39,11 @@
 #include "llcoros.h"
 #include "llfloaterreg.h"
 #include "llfloatersidepanelcontainer.h"
+#include "lldir.h"
 #include "llinventorypanel.h"
 #include "llnotifications.h"
 #include "llnotificationsutil.h"
+#include "llstring.h"
 #include "llviewereventrecorder.h"
 
 // newview includes
@@ -52,10 +54,10 @@
 #include "llagentui.h"
 #include "llagentwearables.h"
 #include "llagentpilot.h"
+#include "llavataractions.h"
 // [SL:KB] - Patch: Appearance-PhantomAttach | Checked: Catznip-5.0
 #include "llattachmentsmgr.h"
 // [/SL:KB]
-#include "llavataractions.h"
 #include "llcompilequeue.h"
 #include "llconsole.h"
 #include "lldebugview.h"
@@ -7738,7 +7740,7 @@ class LLWorldSetHomeLocation : public view_listener_t
 	{
 		// we just send the message and let the server check for failure cases
 		// server will echo back a "Home position set." alert if it succeeds
-		// and the home location screencapture happens when that alert is received
+		// and the home location screencapture happens when that alert is recieved
 		gAgent.setStartPosition(START_LOCATION_ID_HOME);
 		return true;
 	}

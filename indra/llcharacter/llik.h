@@ -158,14 +158,14 @@ protected:
 // but has a uniform bend limit for orientations perpendicular to 'forward'.
 class SimpleCone : public Constraint
 {
-/*     // Constrains forward axis inside cone.
+    // Constrains forward axis inside cone.
     //
     //        / max_angle
     //       /
     //   ---@--------> forward
     //       \
     //        \ max_angle
-    // */
+    //
 public:
     SimpleCone(const LLVector3& forward_axis, F32 max_angle);
     ~SimpleCone(){}
@@ -182,7 +182,7 @@ private:
 // but has a uniform bend limit for orientations perpendicular to 'forward'.
 class TwistLimitedCone : public Constraint
 {
-/*     // A constraint for the shoulder.  Like SimpleCone but with limited twist
+    // A constraint for the shoulder.  Like SimpleCone but with limited twist
     //
     // View from side:                 View with foward out of page:
     //                                         max_twist
@@ -192,7 +192,7 @@ class TwistLimitedCone : public Constraint
     //       \                             /|
     //        \ cone_angle                / |
     //                             min_twist
-    // */
+    //
 public:
     TwistLimitedCone(const LLVector3& forward_axis, F32 cone_angle, F32 min_twist, F32 max_twist);
     ~TwistLimitedCone(){}
@@ -212,7 +212,7 @@ private:
 // and allows limited twist about its 'forward' axis.
 class ElbowConstraint : public Constraint
 {
-/*     // A Constraint for Elbow: limited hinge with limited twist about forward (forearm) axis.
+    // A Constraint for Elbow: limited hinge with limited twist about forward (forearm) axis.
     //
     // View from the side,             View with foreward axis out of page:
     // with pivot axis out of page:
@@ -222,7 +222,7 @@ class ElbowConstraint : public Constraint
     //  ---(o)--------+  forward        ----(o)----> left
     //       \                              /|
     //        \ min_bend                   / |
-    //                              min_twist */
+    //                              min_twist
 public:
     ElbowConstraint(const LLVector3& forward_axis, const LLVector3& pivot_axis, F32 min_bend, F32 max_bend, F32 min_twist, F32 max_twist);
     LLQuaternion computeAdjustedLocalRot(const LLQuaternion& joint_local_rot) const override;
@@ -243,7 +243,7 @@ private:
 // but does not allow any twist about its 'forward' axis.
 class KneeConstraint : public Constraint
 {
-/*     // A Constraint for knee, or finger. Like ElbowConstraint but
+    // A Constraint for knee, or finger. Like ElbowConstraint but
     // no twist allowed, min/max limits on angle about pivot.
     //
     // View from the side, with pivot axis out of page:
@@ -253,7 +253,7 @@ class KneeConstraint : public Constraint
     //  ---(o)--------+
     //       \
     //        \ min_bend
-    // */
+    //
 public:
     KneeConstraint(const LLVector3& forward_axis, const LLVector3& pivot_axis, F32 min_bend, F32 max_bend);
     LLQuaternion computeAdjustedLocalRot(const LLQuaternion& joint_local_rot) const override;
@@ -269,7 +269,7 @@ private:
     F32 mMaxBend;
 };
 
-/* // AcuteEllipsoidalCone is like SimpleCone but with asymmetric radiuses in
+// AcuteEllipsoidalCone is like SimpleCone but with asymmetric radiuses in
 // the up, left, down, right directions.  In other words: it has non-symmetric
 // bend limits for axes perpendicular to its 'forward' axix.  It was implemented
 // mostly as an exercise, since it is similar to the Constraint described in
@@ -284,7 +284,7 @@ private:
 //   ---@------------------+
 //           forward      /|
 //                         |
-// */
+//
 class AcuteEllipsoidalCone : public Constraint
 {
 public:
@@ -316,7 +316,7 @@ private:
 // but zero twist.
 class DoubleLimitedHinge : public Constraint
 {
-/*     // A Constraint for first finger bones.
+    // A Constraint for first finger bones.
     // No twist allowed, min/max limits on yaw, then pitch.
     //
     // View from above                     View from right
@@ -329,7 +329,7 @@ class DoubleLimitedHinge : public Constraint
     //  ---(o)--------> forward_axis        ---(x)--------> forward_axis
     //    up \                              left \
     //        \ min_yaw_angle                     \ max_pitch_angle
-    // */
+    //
 public:
     DoubleLimitedHinge(
             const LLVector3& forward_axis,
@@ -352,7 +352,7 @@ private:
     F32 mMaxPitch;
 };
 
-/* // Joint represents a constrained bone in the skeleton heirarchy.
+// Joint represents a constrained bone in the skeleton heirarchy.
 // It typically has a parent Joint, a fixed mLocalPos position in its
 // parent's local-frame, and a fixed mBone to its 'end' position
 // in its own local-frame.  A summary of its important data members
@@ -373,7 +373,7 @@ private:
 // The world-frame 'end' position of the Joint can be calculated:
 //
 //     world_end_pos = mPos + mBone * mRot
-// */
+//
 class Joint
 {
 public:

@@ -114,7 +114,7 @@ void compute_angle_limits(F32& min_angle, F32& max_angle)
 
 F32 compute_clamped_angle(F32 angle, F32 min_angle, F32 max_angle)
 {
-/*     // utility function for clamping angle between two limits
+    // utility function for clamping angle between two limits
     // Consider angle limits: min_angle and max_angle
     // with axis out of the page.  There exists an "invalid bisector"
     // angle which splits the invalid zone between the that which is
@@ -129,7 +129,7 @@ F32 compute_clamped_angle(F32 angle, F32 min_angle, F32 max_angle)
     //              .-'      \
     //           .-'          \
     // invalid_bisector       min_angle
-    // */
+    //
     F32 invalid_bisector = max_angle + 0.5 * (F_TWO_PI - (max_angle - min_angle));
     if ((angle > max_angle && angle < invalid_bisector)
             || angle < invalid_bisector - F_TWO_PI)
@@ -647,7 +647,7 @@ LLQuaternion LLIK::AcuteEllipsoidalCone::computeAdjustedLocalRot(const LLQuatern
     // checking for violation in scaled frame
     if (forward_component / new_joint_forward.length() < mQuadrantCosAngles[q])
     {
-        /*// joint violates constraint --> project onto cone
+        // joint violates constraint --> project onto cone
         //
         // violates      projected
         //       +        +
@@ -664,7 +664,7 @@ LLQuaternion LLIK::AcuteEllipsoidalCone::computeAdjustedLocalRot(const LLQuatern
         // in the scaled frame. We can use the formula:
         //     adjacent = opposite * cos(angle) / sin(angle)
         //     adjacent = opposite * cot(angle)
-        // */
+        //
         F32 orthogonal_component = std::sqrt(scaled_left_component * scaled_left_component + up_component * up_component);
         forward_component = orthogonal_component * mQuadrantCotAngles[q];
 
@@ -2042,7 +2042,7 @@ void LLIK::Solver::rebuildAllChains()
     }
     mChainMap.clear();
 
-    /*// makeChains
+    // makeChains
     //
     // Consider the following hypothetical skeleton, where each Joint tip
     // has a numerical ID and each end-effector tip is denoted with
@@ -2097,7 +2097,7 @@ void LLIK::Solver::rebuildAllChains()
     //       20:[20,19,2] }
     // and:
     //     { 2:[2,1,0] }
-    //*/
+    //
 
     std::set<S16> sub_bases;
     // mTargets is sorted by joint_id low-to-high

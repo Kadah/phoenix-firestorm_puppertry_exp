@@ -40,19 +40,32 @@ constexpr U32 PUPPET_MAX_EVENT_BYTES = 200;
 U8      PUPPET_WRITE_BUFFER[PUPPET_MAX_EVENT_BYTES]; //HACK move this somewhere better.
 
 
-size_t pack_vec3(U8* wptr, const LLVector3 &vec)
+// Helper function
+// Note that the passed in vector is quantized
+size_t pack_vec3(U8* wptr, LLVector3 &vec)
 {
     size_t offset(0);
-    for (const F32 &val : vec.mV)
-    {
-        htolememcpy(wptr + offset, &val, MVT_F32, sizeof(F32));
-        offset += sizeof(F32);
-    }
+
+    // pack F32 components into 16 bits
+    U16 x, y, z;
+    vec.quantize16(-LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET, -LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET);
+    x = F32_to_U16(vec.mV[VX], -LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET);
+    y = F32_to_U16(vec.mV[VY], -LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET);
+    z = F32_to_U16(vec.mV[VZ], -LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET);
+
+    htolememcpy(wptr + offset, &x, MVT_U16, sizeof(U16));
+    offset += sizeof(U16);
+    htolememcpy(wptr + offset, &y, MVT_U16, sizeof(U16));
+    offset += sizeof(U16);
+    htolememcpy(wptr + offset, &z, MVT_U16, sizeof(U16));
+    offset += sizeof(U16);
+
     return offset;
 }
 
-// helper function
-size_t pack_quat(U8* wptr, const LLQuaternion& quat)
+// Helper function
+// Note that the passed in quaternion is quantized and possibly negated
+size_t pack_quat(U8* wptr, LLQuaternion& quat)
 {
     // A Quaternion is a 4D object but the group isomorphic with rotations is
     // limited to the surface of the unit hypersphere (radius = 1). Consequently
@@ -61,31 +74,47 @@ size_t pack_quat(U8* wptr, const LLQuaternion& quat)
     // real component (W) is positive by negating the Quaternion as necessary
     // and then we store only the imaginary part (XYZ).  The real part can be
     // obtained with the formula: W = sqrt(1.0 - X*X + Y*Y + Z*Z)
-    LLQuaternion q(quat);
-    if (q.mQ[VW] < 0.0f)
+    if (quat.mQ[VW] < 0.0f)
     {
         // negate the quaternion to keep its real part positive
-        q = -1.0f * q;
+        quat = -1.0f * quat;
     }
     // store the imaginary part
     size_t offset(0);
-    for (S32 idx(0); idx < 3; ++idx)
-    {
-        htolememcpy(wptr + offset, &q.mQ[idx], MVT_F32, sizeof(F32));
-        offset += sizeof(F32);
-    }
+
+    // pack F32 components into 16 bits
+    quat.quantize16(-LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET);
+    U16 x = F32_to_U16(quat.mQ[VX], -LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET);
+    U16 y = F32_to_U16(quat.mQ[VY], -LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET);
+    U16 z = F32_to_U16(quat.mQ[VZ], -LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET);
+
+    htolememcpy(wptr + offset, &x, MVT_U16, sizeof(U16));
+    offset += sizeof(U16);
+    htolememcpy(wptr + offset, &y, MVT_U16, sizeof(U16));
+    offset += sizeof(U16);
+    htolememcpy(wptr + offset, &z, MVT_U16, sizeof(U16));
+    offset += sizeof(U16);
+
     return offset;
 }
 
-// helper function
-size_t unpack_vec3(U8* wptr, LLVector3* vec)
+// helper function - read LLVector3 from data
+size_t unpack_vec3(U8* wptr, LLVector3& vec)
 {
     U32 offset(0);
-    for (U32 i = 0; i < 3; ++i)
-    {
-        htolememcpy(&vec->mV[i], wptr + offset, MVT_F32, sizeof(F32));
-        offset += sizeof(F32);
-    }
+    U16 x, y, z;    // F32 data is packed in 16 bits
+
+    htolememcpy(&x, wptr + offset, MVT_U16, sizeof(U16));
+    offset += sizeof(U16);
+    htolememcpy(&y, wptr + offset, MVT_U16, sizeof(U16));
+    offset += sizeof(U16);
+    htolememcpy(&z, wptr + offset, MVT_U16, sizeof(U16));
+    offset += sizeof(U16);
+
+    vec.mV[VX] = U16_to_F32(x, -LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET);
+    vec.mV[VY] = U16_to_F32(y, -LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET);
+    vec.mV[VZ] = U16_to_F32(z, -LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET);
+
     return offset;
 }
 
@@ -96,11 +125,18 @@ size_t unpack_quat(U8* wptr, LLQuaternion& quat)
     // real part (W) is obtained with the formula:
     // W = sqrt(1.0 - X*X + Y*Y + Z*Z)
     size_t offset(0);
-    for (S32 idx(0); idx < 3; ++idx)
-    {
-        htolememcpy(&quat.mQ[idx], wptr + offset, MVT_F32, sizeof(F32));
-        offset += sizeof(F32);
-    }
+
+    U16 x, y, z;    // F32 data is packed into 16 bits
+    htolememcpy(&x, wptr + offset, MVT_U16, sizeof(U16));
+    offset += sizeof(U16);
+    htolememcpy(&y, wptr + offset, MVT_U16, sizeof(U16));
+    offset += sizeof(U16);
+    htolememcpy(&z, wptr + offset, MVT_U16, sizeof(U16));
+    offset += sizeof(U16);
+
+    quat.mQ[VX] = U16_to_F32(x, -LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET);
+    quat.mQ[VY] = U16_to_F32(y, -LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET);
+    quat.mQ[VZ] = U16_to_F32(z, -LL_MAX_PELVIS_OFFSET, LL_MAX_PELVIS_OFFSET);
 
     F32 imaginary_length_squared = quat.mQ[VX] * quat.mQ[VX]
             + quat.mQ[VY] * quat.mQ[VY] + quat.mQ[VZ] * quat.mQ[VZ];
@@ -194,7 +230,7 @@ size_t LLPuppetJointEvent::getSize() const
     return num_bytes;
 }
 
-size_t LLPuppetJointEvent::pack(U8* wptr) const
+size_t LLPuppetJointEvent::pack(U8* wptr)
 {
     //Stuff everything into a binary blob to save overhead.
     size_t offset(0);
@@ -219,14 +255,14 @@ size_t LLPuppetJointEvent::pack(U8* wptr) const
         offset += pack_vec3(wptr+offset, mScale);
     }
 
-    LL_DEBUGS("PUPPET_SPAM") << "Packed event for joint " << mJointID << " with flags 0x" << std::hex << static_cast<S32>(mMask) << std::dec << " into " << offset << " bytes.";
+    LL_DEBUGS("PUPPET_SPAM_PACK") << "Packed event for joint " << mJointID << " with flags 0x" << std::hex << static_cast<S32>(mMask) << std::dec << " into " << offset << " bytes.";
     if (mMask & EF_ROTATION)
         LL_CONT << " rot=" << mRotation;
     if (mMask & EF_POSITION)
         LL_CONT << " pos=" << mPosition;
     if (mMask & EF_SCALE)
         LL_CONT << " scale=" << mScale;
-    LL_CONT << " raw=" << LLError::arraylogger(wptr, offset) << LL_ENDL;
+    LL_CONT << " raw=" << LLError::arraylogger(wptr, offset) << " in frame " << (S32)gFrameCount << LL_ENDL;
 
     return offset;
 }
@@ -246,21 +282,21 @@ size_t LLPuppetJointEvent::unpack(U8* wptr)
     }
     if (mMask & EF_POSITION)
     {
-        offset += unpack_vec3(wptr+offset, &mPosition);
+        offset += unpack_vec3(wptr+offset, mPosition);
     }
     if (mMask & EF_SCALE)
     {
-        offset += unpack_vec3(wptr+offset, &mScale);
+        offset += unpack_vec3(wptr+offset, mScale);
     }
 
-    LL_DEBUGS("PUPPET_SPAM") << "Unpacked event for joint " << mJointID << " with flags 0x" << std::hex << static_cast<S32>(mMask) << std::dec << " from " << offset << " bytes.";
+    LL_DEBUGS("PUPPET_SPAM_UNPACK") << "Unpacked event for joint " << mJointID << " with flags 0x" << std::hex << static_cast<S32>(mMask) << std::dec << " from " << offset << " bytes.";
     if (mMask & EF_ROTATION)
         LL_CONT << " rot=" << mRotation;
     if (mMask & EF_POSITION)
         LL_CONT << " pos=" << mPosition;
     if (mMask & EF_SCALE)
         LL_CONT << " scale=" << mScale;
-    LL_CONT << " raw=" << LLError::arraylogger(wptr, offset) << LL_ENDL;
+    LL_CONT << " raw=" << LLError::arraylogger(wptr, offset) << " in frame " << (S32)gFrameCount << LL_ENDL;
 
     return offset;
 }
@@ -284,10 +320,10 @@ void LLPuppetEvent::addJointEvent(const LLPuppetJointEvent& joint_event)
     mJointEvents.push_back(joint_event);
 }
 
-bool  LLPuppetEvent::pack(LLDataPackerBinaryBuffer& buffer)
+bool  LLPuppetEvent::pack(LLDataPackerBinaryBuffer& buffer, S32& out_num_joints)
 {
     //A PuppetEvent contains a timestamp and one or more joints with one or more actions applied to it.
-    //Return value is true if we packed all joints into this event.
+    //Return value is true if we packed all joints into this event.    num_packed is set to number of joint events packed ok
     S16 num_joints(0);
     size_t buffer_size(buffer.getBufferSize() - buffer.getCurrentSize());
     bool result(true);
@@ -323,8 +359,9 @@ bool  LLPuppetEvent::pack(LLDataPackerBinaryBuffer& buffer)
     buffer.packS16(num_joints, "num");
     buffer.packBinaryData(scratch_buffer.data(), buf_sz, "data");
 
-    LL_DEBUGS("PUPPET_SPAM") << "Packed " << num_joints << " joint events (of " << total << ") into " << len << " bytes. " <<
-        "Event data size is " << buf_sz << "bytes. Buffer now contains " << buffer.getCurrentSize() << " bytes." << LL_ENDL;
+    out_num_joints = num_joints;
+    LL_DEBUGS("PUPPET_SPAM") << "Packed " << num_joints << " joint events (of " << total << " to pack) into " << len << " byte block. " <<
+        "Event data size is " << buf_sz << " in frame " << (S32) gFrameCount << LL_ENDL;
 
     return result;
 }
@@ -366,6 +403,6 @@ bool LLPuppetEvent::unpack(LLDataPackerBinaryBuffer& buffer)
     LL_DEBUGS_IF(index != num_joints, "Puppet") << "Unexpected joint count unpacking puppetry, expecting " << num_joints << ", only read " << index << LL_ENDL;
     LL_DEBUGS_IF(offset != buff_sz, "Puppet") << "Unread data in buffer. " << buff_sz << " bytes received, but only " << offset << " bytes used." << LL_ENDL;
 
-    LL_DEBUGS("PUPPET_SPAM") << "Unpacked " << mJointEvents.size() << " joint events. event buffer size=" << buff_sz << " last offset=" << offset << LL_ENDL;
+    LL_DEBUGS("PUPPET_SPAM") << "Unpacked " << mJointEvents.size() << " joint events. event buffer size=" << buff_sz << " last offset=" << offset << " in frame " << (S32)gFrameCount << LL_ENDL;
     return (index == num_joints) && (offset == buff_sz);
 }
